@@ -5,6 +5,9 @@
   "rewrites": [
     { "source": "/api/head/status", "destination": "/api/head-status" },
     { "source": "/api/head/update", "destination": "/api/head" },
+    { "source": "/api/head/delete", "destination": "/api/head-delete" },
+    { "source": "/api/member/status", "destination": "/api/members" },
+    { "source": "/api/member/activate-manual", "destination": "/api/members" },
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
