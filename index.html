@@ -583,6 +583,28 @@
         };
       },
 
+      getTodayDateOnly() {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      },
+
+      getEventDateOnly(dateVal) {
+        if (!dateVal) return null;
+        if (typeof dateVal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateVal.trim())) {
+          return dateVal.trim();
+        }
+        const d = new Date(dateVal);
+        if (isNaN(d.getTime())) return null;
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      },
+
+      isEventToday(eventDate) {
+        if (!eventDate) return false;
+        return this.getEventDateOnly(eventDate) === this.getTodayDateOnly();
+      },
+
       getHeadPrice(head, category) {
         if (!head || !head.prices) return null;
         const cat = category || 'member';
@@ -1646,108 +1668,146 @@
                   </tr>
                 </thead>
                 <tbody>
-                  ${this.data.heads.map(h => {
-                    const hPays = payments.filter(p => p.headId === h.id || p.headCode === h.code);
-                    const mems = hPays.filter(p => p.payerType === 'member');
-                    const guests = hPays.filter(p => p.payerType === 'non_member');
-                    const attendedCount = hPays.filter(p => p.attended).length;
-                    const giftCount = hPays.filter(p => p.giftCollected).length;
-                    const gross = hPays.reduce((acc, p) => acc + p.totalAmount, 0);
-                    const isDeleted = h.status === 'deleted' || h.isDeleted;
-                    const isDeactivated = h.status === 'deactivated' || h.status === 'inactive';
-                    const isExpired = h.activeUntil && new Date(h.activeUntil) < new Date();
+                  ${(() => {
+                    const now = new Date();
+                    const sortedHeads = [...(this.data.heads || [])].sort((a, b) => {
+                      const aDeleted = a.status === 'deleted' || a.isDeleted;
+                      const aDeactivated = a.status === 'deactivated' || a.status === 'inactive';
+                      const aExpired = a.activeUntil && new Date(a.activeUntil) < now;
+                      const aActive = !aDeleted && !aDeactivated && !aExpired;
 
-                    const pAssoc = (h.prices?.associate_member ?? h.prices?.new_member) != null ? `₹${Number(h.prices.associate_member ?? h.prices.new_member).toLocaleString('en-IN')}` : '-';
-                    const pMem = h.prices?.member != null ? `₹${Number(h.prices.member).toLocaleString('en-IN')}` : '-';
-                    const pBrd = h.prices?.board_member != null ? `₹${Number(h.prices.board_member).toLocaleString('en-IN')}` : '-';
-                    const pGst = h.prices?.non_member != null ? `₹${Number(h.prices.non_member).toLocaleString('en-IN')}` : '<span style="color: var(--text-dim);">Restricted</span>';
+                      const bDeleted = b.status === 'deleted' || b.isDeleted;
+                      const bDeactivated = b.status === 'deactivated' || b.status === 'inactive';
+                      const bExpired = b.activeUntil && new Date(b.activeUntil) < now;
+                      const bActive = !bDeleted && !bDeactivated && !bExpired;
 
-                    return `
-                      <tr style="${isDeleted ? 'background: rgba(148, 163, 184, 0.05); opacity: 0.8;' : isDeactivated ? 'background: rgba(239, 68, 68, 0.04);' : ''}">
-                        <td>
-                          <div>
-                            <strong style="color: ${isDeleted ? '#94a3b8' : isDeactivated ? '#cbd5e1' : '#ffffff'}; font-size: 13.5px;">${h.title}</strong>
-                            <div style="font-size: 11px; color: #38bdf8; margin-top: 3px;">
-                              Code: <strong>${h.code}</strong> • Event: ${h.eventDate || 'N/A'} • Closes: ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      // 1. Active programs at the top, deactivated or expired at the lower side
+                      if (aActive && !bActive) return -1;
+                      if (!aActive && bActive) return 1;
+
+                      // 2. Both active: Annual Membership first, then by event date ascending
+                      if (aActive && bActive) {
+                        if (a.code === 'MEM' && b.code !== 'MEM') return -1;
+                        if (b.code === 'MEM' && a.code !== 'MEM') return 1;
+                        const aDate = a.eventDate ? new Date(a.eventDate).getTime() : 0;
+                        const bDate = b.eventDate ? new Date(b.eventDate).getTime() : 0;
+                        return aDate - bDate;
+                      }
+
+                      // 3. Both inactive: expired first, then deactivated, then deleted
+                      const getRank = (item, isExp, isDeact, isDel) => {
+                        if (isDel) return 3;
+                        if (isDeact) return 2;
+                        if (isExp) return 1;
+                        return 0;
+                      };
+                      return getRank(a, aExpired, aDeactivated, aDeleted) - getRank(b, bExpired, bDeactivated, bDeleted);
+                    });
+
+                    return sortedHeads.map(h => {
+                      const hPays = payments.filter(p => p.headId === h.id || p.headCode === h.code);
+                      const mems = hPays.filter(p => p.payerType === 'member');
+                      const guests = hPays.filter(p => p.payerType === 'non_member');
+                      const attendedCount = hPays.filter(p => p.attended).length;
+                      const giftCount = hPays.filter(p => p.giftCollected).length;
+                      const gross = hPays.reduce((acc, p) => acc + p.totalAmount, 0);
+                      const isDeleted = h.status === 'deleted' || h.isDeleted;
+                      const isDeactivated = h.status === 'deactivated' || h.status === 'inactive';
+                      const isExpired = h.activeUntil && new Date(h.activeUntil) < now;
+                      const isToday = this.isEventToday(h.eventDate);
+
+                      const pAssoc = (h.prices?.associate_member ?? h.prices?.new_member) != null ? `₹${Number(h.prices.associate_member ?? h.prices.new_member).toLocaleString('en-IN')}` : '-';
+                      const pMem = h.prices?.member != null ? `₹${Number(h.prices.member).toLocaleString('en-IN')}` : '-';
+                      const pBrd = h.prices?.board_member != null ? `₹${Number(h.prices.board_member).toLocaleString('en-IN')}` : '-';
+                      const pGst = h.prices?.non_member != null ? `₹${Number(h.prices.non_member).toLocaleString('en-IN')}` : '<span style="color: var(--text-dim);">Restricted</span>';
+
+                      return `
+                        <tr style="${isDeleted ? 'background: rgba(148, 163, 184, 0.05); opacity: 0.8;' : isDeactivated ? 'background: rgba(239, 68, 68, 0.04);' : ''}">
+                          <td>
+                            <div>
+                              <strong style="color: ${isDeleted ? '#94a3b8' : isDeactivated ? '#cbd5e1' : '#ffffff'}; font-size: 13.5px;">${h.title}</strong>
+                              <div style="font-size: 11px; color: #38bdf8; margin-top: 3px;">
+                                Code: <strong>${h.code}</strong> • Event: ${h.eventDate || 'N/A'}${isToday ? ' <span class="badge" style="background: rgba(16, 185, 129, 0.25); color: #34d399; border: 1px solid #10b981; font-size: 10px; padding: 1px 6px;">● LIVE TODAY</span>' : ''} • Closes: ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td><span class="badge badge-open">${h.type.toUpperCase()}</span></td>
-                        <td>
-                          ${isDeleted ? `
-                            <span class="badge" style="background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.4);">
-                              🗑️ DELETED
-                            </span>
-                          ` : isDeactivated ? `
-                            <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">
-                              ⏸ DEACTIVATED
-                            </span>
-                          ` : isExpired ? `
-                            <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">
-                              ⌛ EXPIRED
-                            </span>
-                          ` : `
-                            <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);">
-                              ● ACTIVE
-                            </span>
-                          `}
-                        </td>
-                        <td style="font-size: 11.5px; line-height: 1.5;">
-                          <div><span style="color: var(--text-dim);">Assoc Mem:</span> <strong style="color: #fbbf24;">${pAssoc}</strong></div>
-                          <div><span style="color: var(--text-dim);">Reg Mem:</span> <strong style="color: #38bdf8;">${pMem}</strong></div>
-                          <div><span style="color: var(--text-dim);">Board:</span> <strong style="color: #c084fc;">${pBrd}</strong></div>
-                          <div><span style="color: var(--text-dim);">Guest:</span> <strong>${pGst}</strong></div>
-                        </td>
-                        <td>
-                          <strong>${hPays.length}</strong>
-                          <div style="font-size: 11px; color: var(--text-muted);">${mems.length} Mems / ${guests.length} Guests</div>
-                          ${h.type !== 'membership' ? `
-                            <div style="font-size: 11px; color: #38bdf8; margin-top: 4px;">
-                              Gate: <strong style="color: #34d399;">${attendedCount}/${hPays.length}</strong> • Gifts: <strong style="color: #fbbf24;">${giftCount}/${hPays.length}</strong>
-                            </div>
-                          ` : ''}
-                        </td>
-                        <td style="color: #34d399; font-weight: 700; font-size: 13.5px;">₹${gross.toLocaleString('en-IN')}</td>
-                        <td style="text-align: center;">
-                          <div style="display: flex; gap: 5px; align-items: center; justify-content: center; flex-wrap: wrap;">
-                            <button onclick="app.openEditHeadModal('${h.id}')" class="btn btn-outline btn-sm" style="padding: 4px 8px; font-size: 11.5px;" title="Modify title, extend dates, increase/decrease prices">
-                              ✏️ Modify
-                            </button>
+                          </td>
+                          <td><span class="badge badge-open">${h.type.toUpperCase()}</span></td>
+                          <td>
                             ${isDeleted ? `
-                              <button onclick="app.toggleHeadStatus('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" title="Restore this program to active status">
-                                ▶ Restore
-                              </button>
+                              <span class="badge" style="background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.4);">
+                                🗑️ DELETED
+                              </span>
                             ` : isDeactivated ? `
-                              <button onclick="app.toggleHeadStatus('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #34d399; border-color: rgba(16, 185, 129, 0.4);" title="Reactivate this training or membership">
-                                ▶ Activate
-                              </button>
-                              <button onclick="app.confirmDeleteHead('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" title="Delete / archive this program">
-                                🗑️ Delete
-                              </button>
+                              <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">
+                                ⏸ DEACTIVATED
+                              </span>
+                            ` : isExpired ? `
+                              <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">
+                                ⌛ EXPIRED
+                              </span>
                             ` : `
-                              <button onclick="app.toggleHeadStatus('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #f87171; border-color: rgba(239, 68, 68, 0.4);" title="Deactivate this program (omits from payment pages)">
-                                ⏸ Deactivate
-                              </button>
-                              <button onclick="app.confirmDeleteHead('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" title="Delete / archive this program">
-                                🗑️ Delete
-                              </button>
+                              <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);">
+                                ● ACTIVE
+                              </span>
                             `}
+                          </td>
+                          <td style="font-size: 11.5px; line-height: 1.5;">
+                            <div><span style="color: var(--text-dim);">Assoc Mem:</span> <strong style="color: #fbbf24;">${pAssoc}</strong></div>
+                            <div><span style="color: var(--text-dim);">Reg Mem:</span> <strong style="color: #38bdf8;">${pMem}</strong></div>
+                            <div><span style="color: var(--text-dim);">Board:</span> <strong style="color: #c084fc;">${pBrd}</strong></div>
+                            <div><span style="color: var(--text-dim);">Guest:</span> <strong>${pGst}</strong></div>
+                          </td>
+                          <td>
+                            <strong>${hPays.length}</strong>
+                            <div style="font-size: 11px; color: var(--text-muted);">${mems.length} Mems / ${guests.length} Guests</div>
                             ${h.type !== 'membership' ? `
-                              <button onclick="app.openScannerModal('${h.id}', 'entry')" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11.5px; background: #0284c7; border-color: #0369a1;" title="Open live camera kiosk to scan attendance QR">
-                                📷 Attendance
-                              </button>
-                              <button onclick="app.openScannerModal('${h.id}', 'gift')" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11.5px; background: #d97706; border-color: #b45309;" title="Open live camera kiosk to verify gift collection QR">
-                                🎁 Gift Kiosk
-                              </button>
-                              <button onclick="app.openDelegateTracker('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; border-color: rgba(56, 189, 248, 0.35); color: #38bdf8;" title="View delegates roster, mark check-ins and export list">
-                                📊 Roster (${hPays.length})
-                              </button>
+                              <div style="font-size: 11px; color: #38bdf8; margin-top: 4px;">
+                                Gate: <strong style="color: #34d399;">${attendedCount}/${hPays.length}</strong> • Gifts: <strong style="color: #fbbf24;">${giftCount}/${hPays.length}</strong>
+                              </div>
                             ` : ''}
-                          </div>
-                        </td>
-                      </tr>
-                    `;
-                  }).join('')}
+                          </td>
+                          <td style="color: #34d399; font-weight: 700; font-size: 13.5px;">₹${gross.toLocaleString('en-IN')}</td>
+                          <td style="text-align: center;">
+                            <div style="display: flex; gap: 5px; align-items: center; justify-content: center; flex-wrap: wrap;">
+                              <button onclick="app.openEditHeadModal('${h.id}')" class="btn btn-outline btn-sm" style="padding: 4px 8px; font-size: 11.5px;" title="Modify title, extend dates, increase/decrease prices">
+                                ✏️ Modify
+                              </button>
+                              ${isDeleted ? `
+                                <button onclick="app.toggleHeadStatus('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" title="Restore this program to active status">
+                                  ▶ Restore
+                                </button>
+                              ` : isDeactivated ? `
+                                <button onclick="app.toggleHeadStatus('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #34d399; border-color: rgba(16, 185, 129, 0.4);" title="Reactivate this training or membership">
+                                  ▶ Activate
+                                </button>
+                                <button onclick="app.confirmDeleteHead('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" title="Delete / archive this program">
+                                  🗑️ Delete
+                                </button>
+                              ` : `
+                                <button onclick="app.toggleHeadStatus('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #f87171; border-color: rgba(239, 68, 68, 0.4);" title="Deactivate this program (omits from payment pages)">
+                                  ⏸ Deactivate
+                                </button>
+                                <button onclick="app.confirmDeleteHead('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" title="Delete / archive this program">
+                                  🗑️ Delete
+                                </button>
+                              `}
+                              ${h.type !== 'membership' ? `
+                                <button onclick="app.openScannerModal('${h.id}', 'attendance')" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11.5px; background: #0284c7; border-color: #0369a1;" title="${isToday ? 'Live Today: Open camera scanner to record gate attendance' : 'Gate attendance check-in unlocks on event day: ' + (h.eventDate || 'N/A')}">
+                                  📷 Attendance${isToday ? ' (Live)' : ''}
+                                </button>
+                                <button onclick="app.openScannerModal('${h.id}', 'gift')" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11.5px; background: #d97706; border-color: #b45309;" title="${isToday ? 'Live Today: Open camera scanner to verify delegate kit handover' : 'Gift collection unlocks on event day: ' + (h.eventDate || 'N/A')}">
+                                  🎁 Gift Kiosk${isToday ? ' (Live)' : ''}
+                                </button>
+                                <button onclick="app.openDelegateTracker('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; border-color: rgba(56, 189, 248, 0.35); color: #38bdf8;" title="View delegates roster, mark check-ins and export list">
+                                  📊 Roster (${hPays.length})
+                                </button>
+                              ` : ''}
+                            </div>
+                          </td>
+                        </tr>
+                      `;
+                    }).join('');
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -4215,7 +4275,21 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         const head = this.data.heads.find(h => h.id === headId);
         if (!head) return;
 
-        const isAttendance = mode === 'attendance';
+        // RULE: Attendance and gift collection only allowed on the day of the training/event held
+        if (head.eventDate) {
+          const eventDateStr = this.getEventDateOnly(head.eventDate);
+          const todayStr = this.getTodayDateOnly();
+          if (eventDateStr !== todayStr) {
+            const isEarly = eventDateStr > todayStr;
+            const actionName = (mode === 'attendance' || mode === 'entry') ? 'Gate attendance check-in' : 'Welcome gift collection';
+            alert(isEarly
+              ? `⚠️ Check-In Kiosk Locked: "${head.title}" is scheduled for ${head.eventDate}.\n\n${actionName} is strictly permitted on the day of the training/event held only (not early or later).`
+              : `🔒 Check-In Kiosk Closed: "${head.title}" took place on ${head.eventDate}.\n\n${actionName} is strictly permitted on the day of the training/event held only (not early or later).`);
+            return;
+          }
+        }
+
+        const isAttendance = mode === 'attendance' || mode === 'entry';
         const modalTitle = isAttendance ? "📷 Gate Entry & Attendance Scanner" : "🎁 Delegate Kit & Welcome Gift Collection";
         const accentColor = isAttendance ? "#38bdf8" : "#a855f7";
         const instruction = isAttendance ? "Scan Attendee QR Code on downloaded Tax Invoice to mark gate entry" : "Scan Welcome Gift QR Code on Tax Invoice to record gift collection";
@@ -4390,6 +4464,35 @@ Participants receive official CREA(I) accreditation credits, certified study mat
           }
           if (statusBox) statusBox.innerHTML = `<span style="color: #f59e0b;">⚠️ Wrong event ticket presented.</span>`;
           return;
+        }
+
+        // RULE: Attendance and gift collection only allowed on the day of the event held
+        const eventHead = head || this.data.heads.find(h => h.id === payment.headId || h.code === payment.headCode);
+        if (eventHead && eventHead.eventDate) {
+          const eventDateStr = this.getEventDateOnly(eventHead.eventDate);
+          const todayStr = this.getTodayDateOnly();
+          if (eventDateStr !== todayStr) {
+            const isEarly = eventDateStr > todayStr;
+            this.playBeep('warning');
+            if (resultBox) {
+              resultBox.style.display = "block";
+              resultBox.innerHTML = `
+                <div style="background: rgba(239, 68, 68, 0.2); border: 2px solid #ef4444; border-radius: 10px; padding: 14px; color: #fca5a5;">
+                  <div style="font-weight: 800; font-size: 15px; color: #f87171; margin-bottom: 6px;">
+                    ⛔ CHECK-IN PROHIBITED: NOT EVENT DAY
+                  </div>
+                  <div style="font-size: 13px; color: #fff;">
+                    <strong>${eventHead.title}</strong> is scheduled for <strong>${eventHead.eventDate}</strong>.
+                  </div>
+                  <div style="font-size: 12px; margin-top: 6px; line-height: 1.4;">
+                    ${isEarly ? '⚠️ Early check-in is not permitted. Attendance and gifts can strictly only be marked on the day of the training/event.' : '🔒 This event has ended. Attendance and gifts cannot be marked after the event date.'}
+                  </div>
+                </div>
+              `;
+            }
+            if (statusBox) statusBox.innerHTML = `<span style="color: #ef4444;">⛔ Blocked: Can only mark on event day (${eventHead.eventDate}). Today is ${todayStr}.</span>`;
+            return;
+          }
         }
 
         const now = new Date();
@@ -4580,6 +4683,11 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         const head = this.data.heads.find(h => h.id === headId);
         if (!head) return;
 
+        const eventDateStr = this.getEventDateOnly(head.eventDate);
+        const todayStr = this.getTodayDateOnly();
+        const isEventToday = eventDateStr === todayStr;
+        const isEarly = eventDateStr && eventDateStr > todayStr;
+
         let registrations = this.data.payments.filter(p => p.headId === headId || p.headCode === head.code || p.headTitle === head.title);
 
         const total = registrations.length;
@@ -4625,12 +4733,30 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                 </div>
               </div>
 
+              <!-- Event Date Policy Notice -->
+              ${!isEventToday ? `
+                <div style="background: ${isEarly ? 'rgba(56, 189, 248, 0.12)' : 'rgba(239, 68, 68, 0.12)'}; border: 1.5px solid ${isEarly ? '#38bdf8' : '#ef4444'}; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; display: flex; align-items: center; gap: 10px;">
+                  <span style="font-size: 20px;">${isEarly ? '⏳' : '🔒'}</span>
+                  <div>
+                    <strong style="color: ${isEarly ? '#38bdf8' : '#f87171'};">${isEarly ? 'Upcoming Event Roster (Check-In Locked)' : 'Past Event Roster (Check-In Locked)'}</strong>: 
+                    This event is scheduled for <strong>${head.eventDate || 'N/A'}</strong>. Attendance check-in and gift collection can strictly only be marked on the day of the event (today is ${todayStr}).
+                  </div>
+                </div>
+              ` : `
+                <div style="background: rgba(16, 185, 129, 0.12); border: 1.5px solid #10b981; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; display: flex; align-items: center; gap: 10px;">
+                  <span style="font-size: 20px;">✅</span>
+                  <div>
+                    <strong style="color: #34d399;">Live Event Day (${head.eventDate})</strong>: Gate check-in and delegate kit handover are currently ACTIVE for today.
+                  </div>
+                </div>
+              `}
+
               <!-- Filter & Actions Bar -->
               <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px;">
                 <input type="text" id="roster-search" class="form-input" placeholder="Search by name, mobile, invoice..." value="${searchTerm}" style="max-width: 320px; padding: 6px 12px; font-size: 12px;" oninput="app.openDelegateTracker('${headId}', this.value)">
                 <div style="display: flex; gap: 8px;">
-                  <button onclick="app.openScannerModal('${headId}', 'attendance')" class="btn btn-secondary btn-sm" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);">📷 Scan Entry</button>
-                  <button onclick="app.openScannerModal('${headId}', 'gift')" class="btn btn-secondary btn-sm" style="color: #c084fc; border-color: rgba(168, 85, 247, 0.4);">🎁 Scan Gift</button>
+                  <button onclick="app.openScannerModal('${headId}', 'attendance')" class="btn btn-secondary btn-sm" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" title="${isEventToday ? 'Open scanner' : 'Check-in only permitted on ' + (head.eventDate || 'event day')}">📷 Scan Entry</button>
+                  <button onclick="app.openScannerModal('${headId}', 'gift')" class="btn btn-secondary btn-sm" style="color: #c084fc; border-color: rgba(168, 85, 247, 0.4);" title="${isEventToday ? 'Open gift scanner' : 'Gift collection only permitted on ' + (head.eventDate || 'event day')}">🎁 Scan Gift</button>
                   <button onclick="app.exportDelegateCSV('${headId}')" class="btn btn-primary btn-sm" style="font-size: 11.5px;">📥 Export Roster CSV</button>
                 </div>
               </div>
@@ -4674,8 +4800,8 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                               ✓ Checked In (${new Date(p.attendedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })})
                             </button>
                           ` : `
-                            <button onclick="app.toggleAttendance('${p.invoiceNo}', '${headId}')" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px;">
-                              + Mark Entry
+                            <button onclick="app.toggleAttendance('${p.invoiceNo}', '${headId}')" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px; ${!isEventToday ? 'opacity: 0.65;' : ''}" title="${!isEventToday ? 'Attendance check-in only permitted on ' + (head.eventDate || 'event day') : 'Mark Entry'}">
+                              ${!isEventToday ? '🔒 ' : '+ '}Mark Entry
                             </button>
                           `}
                         </td>
@@ -4685,8 +4811,8 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                               🎁 Claimed (${new Date(p.giftCollectedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })})
                             </button>
                           ` : `
-                            <button onclick="app.toggleGift('${p.invoiceNo}', '${headId}')" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px;">
-                              + Hand Over Gift
+                            <button onclick="app.toggleGift('${p.invoiceNo}', '${headId}')" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px; ${!isEventToday ? 'opacity: 0.65;' : ''}" title="${!isEventToday ? 'Gift collection only permitted on ' + (head.eventDate || 'event day') : 'Hand Over Gift'}">
+                              ${!isEventToday ? '🔒 ' : '+ '}Hand Over Gift
                             </button>
                           `}
                         </td>
@@ -4705,6 +4831,18 @@ Participants receive official CREA(I) accreditation credits, certified study mat
       },
 
       toggleAttendance(invoiceNo, headId) {
+        const head = this.data.heads.find(h => h.id === headId);
+        if (head && head.eventDate) {
+          const eventDateStr = this.getEventDateOnly(head.eventDate);
+          const todayStr = this.getTodayDateOnly();
+          if (eventDateStr !== todayStr) {
+            const isEarly = eventDateStr > todayStr;
+            alert(isEarly
+              ? `⚠️ Check-in is not permitted before the event date.\n\n"${head.title}" is scheduled for ${head.eventDate}.\nAttendance can strictly only be marked on the day of the event held (today is ${todayStr}).`
+              : `🔒 Check-in is closed.\n\n"${head.title}" took place on ${head.eventDate}.\nAttendance can strictly only be marked on the day of the event held (today is ${todayStr}).`);
+            return;
+          }
+        }
         const payment = this.data.payments.find(p => p.invoiceNo === invoiceNo);
         if (!payment) return;
         payment.attended = !payment.attended;
@@ -4714,6 +4852,18 @@ Participants receive official CREA(I) accreditation credits, certified study mat
       },
 
       toggleGift(invoiceNo, headId) {
+        const head = this.data.heads.find(h => h.id === headId);
+        if (head && head.eventDate) {
+          const eventDateStr = this.getEventDateOnly(head.eventDate);
+          const todayStr = this.getTodayDateOnly();
+          if (eventDateStr !== todayStr) {
+            const isEarly = eventDateStr > todayStr;
+            alert(isEarly
+              ? `⚠️ Gift collection is not permitted before the event date.\n\n"${head.title}" is scheduled for ${head.eventDate}.\nDelegate gifts can strictly only be marked on the day of the event held (today is ${todayStr}).`
+              : `🔒 Gift collection is closed.\n\n"${head.title}" took place on ${head.eventDate}.\nDelegate gifts can strictly only be marked on the day of the event held (today is ${todayStr}).`);
+            return;
+          }
+        }
         const payment = this.data.payments.find(p => p.invoiceNo === invoiceNo);
         if (!payment) return;
         payment.giftCollected = !payment.giftCollected;

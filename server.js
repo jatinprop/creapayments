@@ -1099,6 +1099,32 @@ const server = http.createServer((req, res) => {
         return res.end(JSON.stringify({ success: false, error: `Wrong Event Ticket: This ticket is for "${payment.headTitle}".`, payment }));
       }
 
+      // Find the associated head for this payment
+      const head = (data.heads || []).find((h) =>
+        h.id === payment.headId ||
+        h.code === payment.headCode ||
+        (body.headId && (h.id === body.headId || h.code === body.headId))
+      );
+
+      // RULE: Attendance and gift collection are strictly allowed ONLY on the day of the training / event held
+      if (head && head.eventDate) {
+        const today = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+        const eventDateStr = String(head.eventDate).split("T")[0].trim();
+
+        if (eventDateStr !== todayStr) {
+          const isEarly = eventDateStr > todayStr;
+          res.writeHead(400, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({
+            success: false,
+            error: isEarly
+              ? `Check-in prohibited: "${head.title}" is scheduled for ${eventDateStr}. Attendance and gifts can strictly only be marked on the day of the event held (not early).`
+              : `Check-in closed: "${head.title}" took place on ${eventDateStr}. Attendance and gifts cannot be marked after the event date.`
+          }));
+        }
+      }
+
       const mode = body.mode || "attendance";
       const now = new Date().toISOString();
 
