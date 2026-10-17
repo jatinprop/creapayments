@@ -9,6 +9,12 @@
       "category": "member",
       "company": "Apex Prime Realty",
       "city": "Bangalore",
+      "gstin": "29AABCR1234F1Z5",
+      "address": "Suite 401, Prestige Meridian, MG Road, Bangalore, Karnataka - 560001",
+      "status": "active",
+      "lastPaidFY": "2627",
+      "paymentMeans": "Online Gateway",
+      "activationNote": "Renewed FY 2627 (Invoice CREA/2627/MEM/0001)",
       "joinedDate": "2024-04-10"
     },
     {
@@ -16,9 +22,18 @@
       "name": "Sneha Patel",
       "mobile": "9800000002",
       "email": "sneha.p@lotushomes.co",
-      "category": "new_member",
-      "company": "Lotus Property Consultants",
+      "category": "associate_member",
+      "parentMemberId": "mem-001",
+      "parentMemberName": "Ramesh Gupta",
+      "parentMemberMobile": "9800000001",
+      "company": "Apex Prime Realty / Lotus Homes",
       "city": "Bangalore",
+      "gstin": "29AABCL5678G2Z1",
+      "address": "#12, Lotus Arcade, 100ft Road, Indiranagar, Bangalore, Karnataka - 560038",
+      "status": "active",
+      "lastPaidFY": "2627",
+      "paymentMeans": "Online Gateway",
+      "activationNote": "Associate Fee Paid FY 2627 (Main Member Ramesh Gupta Active)",
       "joinedDate": "2026-06-15"
     },
     {
@@ -29,6 +44,12 @@
       "category": "board_member",
       "company": "Deccan Realtors & Estates",
       "city": "Bangalore",
+      "gstin": "29AABCD9012H3Z7",
+      "address": "Ground Floor, Deccan Chambers, Lavelle Road, Bangalore, Karnataka - 560001",
+      "status": "active",
+      "lastPaidFY": "2627",
+      "paymentMeans": "Online Gateway",
+      "activationNote": "Board Member Standing Paid FY 2627",
       "joinedDate": "2021-01-20"
     },
     {
@@ -39,6 +60,12 @@
       "category": "member",
       "company": "Staypolis Brokerage",
       "city": "Bangalore",
+      "gstin": "29AABCS3456J4Z3",
+      "address": "Unit 3B, Brigade Gateway, Malleshwaram, Bangalore, Karnataka - 560055",
+      "status": "active",
+      "lastPaidFY": "2627",
+      "paymentMeans": "Online Gateway",
+      "activationNote": "Renewed FY 2627 (Invoice CREA/2627/MEM/0006)",
       "joinedDate": "2023-08-01"
     },
     {
@@ -46,10 +73,54 @@
       "name": "Kavita Reddy",
       "mobile": "9711288901",
       "email": "kavita.r@reddyrealty.in",
-      "category": "new_member",
-      "company": "Reddy Associates",
+      "category": "associate_member",
+      "parentMemberId": "mem-004",
+      "parentMemberName": "Anand Murthy",
+      "parentMemberMobile": "9845999000",
+      "company": "Staypolis / Reddy Associates",
       "city": "Bangalore",
+      "gstin": "29AABCR7890K5Z9",
+      "address": "Plot 88, Reddy Complex, Whitefield Main Road, Bangalore, Karnataka - 560066",
+      "status": "deactivated",
+      "lastPaidFY": null,
+      "paymentMeans": null,
+      "activationNote": "Pending Associate Renewal Dues for FY 2026-27",
       "joinedDate": "2026-08-12"
+    },
+    {
+      "id": "mem-006",
+      "name": "Rahul Varma",
+      "mobile": "9880011224",
+      "email": "rahul.v@varmarealty.com",
+      "category": "associate_member",
+      "parentMemberId": "mem-007",
+      "parentMemberName": "Sunita Sharma",
+      "parentMemberMobile": "9988776655",
+      "company": "Embassy Realty / Varma Realty",
+      "city": "Bangalore",
+      "gstin": "29AABCV9988P1Z2",
+      "address": "#44, Varma Towers, Koramangala 5th Block, Bangalore, Karnataka - 560095",
+      "status": "deactivated",
+      "lastPaidFY": "2627",
+      "paymentMeans": "Online Gateway",
+      "activationNote": "Deactivated: Main Member (Sunita Sharma) has not paid FY 2026-27 dues",
+      "joinedDate": "2025-11-01"
+    },
+    {
+      "id": "mem-007",
+      "name": "Sunita Sharma",
+      "mobile": "9988776655",
+      "email": "sunita.sharma@embassyrealty.in",
+      "category": "member",
+      "company": "Embassy Square Realty",
+      "city": "Bangalore",
+      "gstin": "29AABCS1122M3Z4",
+      "address": "Level 2, Embassy Square, Infantry Road, Bangalore, Karnataka - 560001",
+      "status": "deactivated",
+      "lastPaidFY": null,
+      "paymentMeans": null,
+      "activationNote": "Deactivated on 1st April: Pending FY 2026-27 Annual Renewal",
+      "joinedDate": "2023-05-15"
     }
   ],
   "heads": [
@@ -64,12 +135,12 @@
       "activeUntil": "2027-03-31T23:59:59",
       "status": "active",
       "prices": {
-        "new_member": 12000,
+        "associate_member": 5000,
         "member": 10000,
         "board_member": 8000,
         "non_member": null
       },
-      "writeup": "The Confederation of Real Estate Associates (India) — CREA(I) is the premier self-regulatory association of professional real estate brokers, property managers, and valuation experts in South India. \n\nYour annual membership subscription for FY 2026-2027 entitles your firm to comprehensive professional standing, legal assistance on brokerage covenant disputes, and direct integration into the CREA Multi-Listing Exchange (MLE). Over the past twelve months, CREA(I) mediated over 140 commercial leasing transactions and spearheaded ethical commission standardization benchmarks across residential corridors.\n\nKey Member Privileges:\n1. Official CREA(I) Certified Realtor Certificate and verified digital credentials for client trust.\n2. Direct access to our monthly Legal & Notary clinic for RERA complaints, draft scrutiny, and deposit escrow guidance.\n3. Preferential registration rates on all accredited broker mastery certifications and quarterly state symposia.\n4. Comprehensive arbitration board access in the event of client or fellow broker commission evasion.\n5. Complimentary entry to the bi-annual Property Showcase networking breakfasts with tier-1 developers including Prestige, Sobha, and Brigade.\n\nMembers are requested to complete renewal promptly to prevent de-listing from the public verified realtor register."
+      "writeup": "The Confederation of Real Estate Associates (India) — CREA(I) is the premier self-regulatory association of professional real estate brokers, property managers, and valuation experts in South India. \n\nYour annual membership subscription for FY 2026-2027 entitles your firm to comprehensive professional standing, legal assistance on brokerage covenant disputes, and direct integration into the CREA Multi-Listing Exchange (MLE). Associate Members affiliated with active primary member firms enjoy discounted annual fees.\n\nKey Member Privileges:\n1. Official CREA(I) Certified Realtor Certificate and verified digital credentials for client trust.\n2. Direct access to our monthly Legal & Notary clinic for RERA complaints, draft scrutiny, and deposit escrow guidance.\n3. Preferential registration rates on all accredited broker mastery certifications and quarterly state symposia.\n4. Comprehensive arbitration board access in the event of client or fellow broker commission evasion.\n5. Complimentary entry to the bi-annual Property Showcase networking breakfasts with tier-1 developers including Prestige, Sobha, and Brigade."
     },
     {
       "id": "head-trn1",
@@ -82,12 +153,12 @@
       "activeUntil": "2026-10-28T09:00:00",
       "status": "active",
       "prices": {
-        "new_member": 1500,
+        "associate_member": 1200,
         "member": 1200,
         "board_member": 0,
         "non_member": 2500
       },
-      "writeup": "RERA litigation and title verification scrutiny have transformed real estate transactions into rigorous legal engagements. This full-day intensive masterclass is curated specifically for practicing real estate brokers, leasing executives, and independent agents seeking to eliminate liability and elevate deal closings.\n\nLed by Senior Advocate & Real Estate Arbitrator Mr. Ajay Venkatesh along with seasoned land revenue experts, this masterclass delves into practical title search methodologies across Karnataka land records including RTC (Pahani), Encumbrance Certificates (Form 15 & 16), Katha extract nuances (e-Katha vs A-Katha vs B-Katha), and BDA/BMRDA layout approval checks.\n\nKey Highlights of the Syllabus:\n1. Identifying encumbrances, litigation flags, and revenue dispute caveats before listing properties.\n2. Formulating watertight rental and sale agreements that safeguard broker commissions against client circumvention.\n3. RERA Section 9 and 10 agent compliance mandates, annual filings, and advertising dos and don'ts.\n4. Managing client advance tokens and escrow protocol to safeguard earnest deposits.\n5. Interactive case studies on 5 high-profile land title defects resolved in Bangalore courts.\n\nIncludes accredited certification, comprehensive take-home legal draft toolkit on pendrive, gourmet lunch, and high-tea networking with senior legal professionals."
+      "writeup": "RERA litigation and title verification scrutiny have transformed real estate transactions into rigorous legal engagements. This full-day intensive masterclass is curated specifically for practicing real estate brokers, leasing executives, and independent agents seeking to eliminate liability and elevate deal closings.\n\nIncludes delegate entry pass QR, complimentary welcome gift kit QR, legal draft toolkit on pendrive, gourmet lunch, and accredited certification."
     },
     {
       "id": "head-trn2",
@@ -100,30 +171,30 @@
       "activeUntil": "2026-11-18T13:30:00",
       "status": "active",
       "prices": {
-        "new_member": 1000,
+        "associate_member": 800,
         "member": 800,
         "board_member": 0,
         "non_member": 1800
       },
-      "writeup": "High-net-worth individuals and Non-Resident Indians (NRIs) represent over 38% of luxury real estate purchases and premium commercial leasing volume in metropolitan Bangalore. Reaching and qualifying these diaspora investors requires sophisticated digital acquisition funnels beyond conventional classifieds.\n\nThis intensive interactive webinar equips real estate professionals with automated lead generation systems, WhatsApp Business automation workflows, and high-converting performance marketing campaigns on Google Search and Meta Ads.\n\nWorkshop Outline:\n1. Setting up geo-targeted campaigns targeting NRI hubs in the UAE, United States, United Kingdom, and Singapore.\n2. Crafting video walkthrough presentations that convert remote NRI buyers without requiring physical property visits.\n3. Automated WhatsApp CRM workflows for immediate lead engagement within 90 seconds of portal inquiry.\n4. Navigating FEMA regulations, NRE/NRO bank accounts, repatriation covenants, and Power of Attorney (PoA) stamping.\n5. Live demonstration of AI tools for generating property inspection reports and personalized investor pitch decks.\n\nParticipants will receive ready-to-deploy ad copy templates, email sequences, and a recording valid for 12 months."
+      "writeup": "High-net-worth individuals and Non-Resident Indians (NRIs) represent over 38% of luxury real estate purchases and premium commercial leasing volume in metropolitan Bangalore. Reaching and qualifying these diaspora investors requires sophisticated digital acquisition funnels beyond conventional classifieds."
     },
     {
       "id": "head-evt1",
       "code": "EVT1",
       "title": "CREA(I) Annual Realty Conclave & Networking Gala 2026",
       "type": "event",
-      "eventDate": "2026-12-12",
-      "eventTime": "06:00 PM - 10:30 PM IST",
-      "venue": "Grand Ballroom, ITC Windsor, Golf Course Road, Bangalore",
-      "activeUntil": "2026-12-12T17:00:00",
+      "eventDate": "2026-12-15",
+      "eventTime": "05:30 PM - 10:30 PM IST",
+      "venue": "Grand Ballroom, The Leela Palace, Old Airport Road, Bangalore",
+      "activeUntil": "2026-12-15T16:00:00",
       "status": "active",
       "prices": {
-        "new_member": 3500,
+        "associate_member": 2800,
         "member": 2800,
         "board_member": 2000,
         "non_member": 5000
       },
-      "writeup": "The Confederation of Real Estate Associates (India) cordially invites you to our flagship annual gathering — the CREA(I) Annual Realty Conclave & Networking Gala 2026. This landmark evening brings together over 400 distinguished real estate brokers, developers, legal luminaries, and government dignitaries under one roof.\n\nTheme for 2026: 'The Next Decade of Urban Mobility & PropTech Growth in Bangalore'.\n\nEvening Itinerary:\n- 06:00 PM - Registration & Welcome High Tea\n- 06:45 PM - Keynote Address by Hon'ble Minister for Housing & Urban Infrastructure\n- 07:30 PM - Panel Discussion: Infrastructure corridors (Metro Phase 3, PRR & STRR) shaping high-yield residential clusters\n- 08:30 PM - Presentation of the CREA(I) Excellence Awards recognizing top brokerages across South India\n- 09:15 PM - Cocktail Reception, Gala Dinner & Unveiling of the CREA Property Research Whitepaper 2027\n\nDress Code: Formal Western / Indian Traditional Formal.\nComplimentary valet parking available at the venue."
+      "writeup": "The flagship annual congregation of real estate leaders, developers, institutional funds, and accredited brokerages across India. Features keynote addresses by state urban development ministers, RERA chairpersons, and real estate investment trusts (REITs) directors.\n\nAll delegates receive an access pass QR code on their invoice for gate entry, plus a dedicated Gift Collection QR code for claiming the exclusive CREA delegate executive kit and memento at the registration kiosk."
     }
   ],
   "payments": [
@@ -141,13 +212,19 @@
       "payerName": "Ramesh Gupta",
       "payerMobile": "9800000001",
       "payerEmail": "ramesh.gupta@crea-realty.in",
+      "payerGstin": "29AABCR1234F1Z5",
+      "payerAddress": "Suite 401, Prestige Meridian, MG Road, Bangalore, Karnataka - 560001",
       "baseAmount": 10000,
       "cgst": 900,
       "sgst": 900,
       "totalGst": 1800,
       "totalAmount": 11800,
       "status": "success",
-      "method": "Simulated Gateway (Card / NetBanking)"
+      "method": "Simulated Gateway (Card / NetBanking)",
+      "attended": false,
+      "attendedAt": null,
+      "giftCollected": false,
+      "giftCollectedAt": null
     },
     {
       "id": "pay-102",
@@ -163,13 +240,19 @@
       "payerName": "Vikramaditya Rao",
       "payerMobile": "9800000003",
       "payerEmail": "v.rao@deccanproperties.com",
+      "payerGstin": "29AABCD9012H3Z7",
+      "payerAddress": "Ground Floor, Deccan Chambers, Lavelle Road, Bangalore, Karnataka - 560001",
       "baseAmount": 8000,
       "cgst": 720,
       "sgst": 720,
       "totalGst": 1440,
       "totalAmount": 9440,
       "status": "success",
-      "method": "Simulated Gateway (UPI)"
+      "method": "Simulated Gateway (UPI)",
+      "attended": false,
+      "attendedAt": null,
+      "giftCollected": false,
+      "giftCollectedAt": null
     },
     {
       "id": "pay-103",
@@ -180,18 +263,24 @@
       "headCode": "MEM",
       "headTitle": "Annual CREA(I) Membership 2026-2027",
       "payerType": "member",
-      "payerCategory": "new_member",
+      "payerCategory": "associate_member",
       "payerId": "mem-002",
       "payerName": "Sneha Patel",
       "payerMobile": "9800000002",
       "payerEmail": "sneha.p@lotushomes.co",
-      "baseAmount": 12000,
-      "cgst": 1080,
-      "sgst": 1080,
-      "totalGst": 2160,
-      "totalAmount": 14160,
+      "payerGstin": "29AABCL5678G2Z1",
+      "payerAddress": "#12, Lotus Arcade, 100ft Road, Indiranagar, Bangalore, Karnataka - 560038",
+      "baseAmount": 5000,
+      "cgst": 450,
+      "sgst": 450,
+      "totalGst": 900,
+      "totalAmount": 5900,
       "status": "success",
-      "method": "Simulated Gateway (NetBanking)"
+      "method": "Simulated Gateway (NetBanking)",
+      "attended": false,
+      "attendedAt": null,
+      "giftCollected": false,
+      "giftCollectedAt": null
     },
     {
       "id": "pay-104",
@@ -207,13 +296,19 @@
       "payerName": "Ramesh Gupta",
       "payerMobile": "9800000001",
       "payerEmail": "ramesh.gupta@crea-realty.in",
+      "payerGstin": "29AABCR1234F1Z5",
+      "payerAddress": "Suite 401, Prestige Meridian, MG Road, Bangalore, Karnataka - 560001",
       "baseAmount": 1200,
       "cgst": 108,
       "sgst": 108,
       "totalGst": 216,
       "totalAmount": 1416,
       "status": "success",
-      "method": "Simulated Gateway (UPI)"
+      "method": "Simulated Gateway (UPI)",
+      "attended": true,
+      "attendedAt": "2026-10-28T09:45:00.000Z",
+      "giftCollected": true,
+      "giftCollectedAt": "2026-10-28T09:50:00.000Z"
     },
     {
       "id": "pay-105",
@@ -229,13 +324,19 @@
       "payerName": "Siddharth Joshi",
       "payerMobile": "9845112233",
       "payerEmail": "sid.joshi@urbanestates.in",
+      "payerGstin": "29AAACJ1122D1Z8",
+      "payerAddress": "Level 4, Urban Heights, Koramangala, Bangalore - 560034",
       "baseAmount": 2500,
       "cgst": 225,
       "sgst": 225,
       "totalGst": 450,
       "totalAmount": 2950,
       "status": "success",
-      "method": "Simulated Gateway (Credit Card)"
+      "method": "Simulated Gateway (Credit Card)",
+      "attended": true,
+      "attendedAt": "2026-10-28T10:02:00.000Z",
+      "giftCollected": false,
+      "giftCollectedAt": null
     },
     {
       "id": "pay-106",
@@ -251,13 +352,19 @@
       "payerName": "Anand Murthy",
       "payerMobile": "9845999000",
       "payerEmail": "anand.m@staypolis.com",
+      "payerGstin": "29AABCS3456J4Z3",
+      "payerAddress": "Unit 3B, Brigade Gateway, Malleshwaram, Bangalore, Karnataka - 560055",
       "baseAmount": 10000,
       "cgst": 900,
       "sgst": 900,
       "totalGst": 1800,
       "totalAmount": 11800,
       "status": "success",
-      "method": "Simulated Gateway (UPI)"
+      "method": "Simulated Gateway (UPI)",
+      "attended": false,
+      "attendedAt": null,
+      "giftCollected": false,
+      "giftCollectedAt": null
     },
     {
       "id": "pay-107",
@@ -268,18 +375,24 @@
       "headCode": "TRN1",
       "headTitle": "Masterclass: RERA Compliance, Title Verification & Escrows",
       "payerType": "member",
-      "payerCategory": "new_member",
+      "payerCategory": "associate_member",
       "payerId": "mem-002",
       "payerName": "Sneha Patel",
       "payerMobile": "9800000002",
       "payerEmail": "sneha.p@lotushomes.co",
-      "baseAmount": 1500,
-      "cgst": 135,
-      "sgst": 135,
-      "totalGst": 270,
-      "totalAmount": 1770,
+      "payerGstin": "29AABCL5678G2Z1",
+      "payerAddress": "#12, Lotus Arcade, 100ft Road, Indiranagar, Bangalore, Karnataka - 560038",
+      "baseAmount": 1200,
+      "cgst": 108,
+      "sgst": 108,
+      "totalGst": 216,
+      "totalAmount": 1416,
       "status": "success",
-      "method": "Simulated Gateway (UPI)"
+      "method": "Simulated Gateway (UPI)",
+      "attended": false,
+      "attendedAt": null,
+      "giftCollected": false,
+      "giftCollectedAt": null
     },
     {
       "id": "pay-108",
@@ -295,13 +408,19 @@
       "payerName": "Deepak Mehra",
       "payerMobile": "9820011223",
       "payerEmail": "deepak@mehraproperty.com",
+      "payerGstin": "27AABCM4433E1Z4",
+      "payerAddress": "Mehra Towers, Nariman Point, Mumbai - 400021",
       "baseAmount": 2500,
       "cgst": 225,
       "sgst": 225,
       "totalGst": 450,
       "totalAmount": 2950,
       "status": "success",
-      "method": "Simulated Gateway (Debit Card)"
+      "method": "Simulated Gateway (Debit Card)",
+      "attended": false,
+      "attendedAt": null,
+      "giftCollected": false,
+      "giftCollectedAt": null
     },
     {
       "id": "pay-109",
@@ -317,13 +436,19 @@
       "payerName": "Ramesh Gupta",
       "payerMobile": "9800000001",
       "payerEmail": "ramesh.gupta@crea-realty.in",
+      "payerGstin": "29AABCR1234F1Z5",
+      "payerAddress": "Suite 401, Prestige Meridian, MG Road, Bangalore, Karnataka - 560001",
       "baseAmount": 800,
       "cgst": 72,
       "sgst": 72,
       "totalGst": 144,
       "totalAmount": 944,
       "status": "success",
-      "method": "Simulated Gateway (UPI)"
+      "method": "Simulated Gateway (UPI)",
+      "attended": false,
+      "attendedAt": null,
+      "giftCollected": false,
+      "giftCollectedAt": null
     },
     {
       "id": "pay-110",
@@ -339,13 +464,19 @@
       "payerName": "Harish Bhatia",
       "payerMobile": "9876543210",
       "payerEmail": "harish@bhatiarealtors.in",
+      "payerGstin": "29AABCB5566G1Z2",
+      "payerAddress": "Bhatia Complex, Jayanagar 4th Block, Bangalore - 560011",
       "baseAmount": 1800,
       "cgst": 162,
       "sgst": 162,
       "totalGst": 324,
       "totalAmount": 2124,
       "status": "success",
-      "method": "Simulated Gateway (Card)"
+      "method": "Simulated Gateway (Card)",
+      "attended": false,
+      "attendedAt": null,
+      "giftCollected": false,
+      "giftCollectedAt": null
     },
     {
       "id": "pay-111",
@@ -361,13 +492,19 @@
       "payerName": "Vikramaditya Rao",
       "payerMobile": "9800000003",
       "payerEmail": "v.rao@deccanproperties.com",
+      "payerGstin": "29AABCD9012H3Z7",
+      "payerAddress": "Ground Floor, Deccan Chambers, Lavelle Road, Bangalore, Karnataka - 560001",
       "baseAmount": 2000,
       "cgst": 180,
       "sgst": 180,
       "totalGst": 360,
       "totalAmount": 2360,
       "status": "success",
-      "method": "Simulated Gateway (Corporate Card)"
+      "method": "Simulated Gateway (Corporate Card)",
+      "attended": false,
+      "attendedAt": null,
+      "giftCollected": false,
+      "giftCollectedAt": null
     },
     {
       "id": "pay-112",
@@ -383,13 +520,19 @@
       "payerName": "Ramesh Gupta",
       "payerMobile": "9800000001",
       "payerEmail": "ramesh.gupta@crea-realty.in",
+      "payerGstin": "29AABCR1234F1Z5",
+      "payerAddress": "Suite 401, Prestige Meridian, MG Road, Bangalore, Karnataka - 560001",
       "baseAmount": 2800,
       "cgst": 252,
       "sgst": 252,
       "totalGst": 504,
       "totalAmount": 3304,
       "status": "success",
-      "method": "Simulated Gateway (UPI)"
+      "method": "Simulated Gateway (UPI)",
+      "attended": false,
+      "attendedAt": null,
+      "giftCollected": false,
+      "giftCollectedAt": null
     },
     {
       "id": "pay-113",
@@ -405,13 +548,19 @@
       "payerName": "Pooja Venkatesh",
       "payerMobile": "9900112233",
       "payerEmail": "pooja.v@greenviewbuilders.com",
+      "payerGstin": "29AAACG8899K1Z5",
+      "payerAddress": "#7, Greenview Towers, Outer Ring Road, Bangalore - 560103",
       "baseAmount": 5000,
       "cgst": 450,
       "sgst": 450,
       "totalGst": 900,
       "totalAmount": 5900,
       "status": "success",
-      "method": "Simulated Gateway (NetBanking)"
+      "method": "Simulated Gateway (NetBanking)",
+      "attended": false,
+      "attendedAt": null,
+      "giftCollected": false,
+      "giftCollectedAt": null
     },
     {
       "id": "pay-114",
@@ -422,18 +571,24 @@
       "headCode": "TRN2",
       "headTitle": "Executive Training: Digital Lead Generation & NRI Client Acquisition",
       "payerType": "member",
-      "payerCategory": "new_member",
+      "payerCategory": "associate_member",
       "payerId": "mem-005",
       "payerName": "Kavita Reddy",
       "payerMobile": "9711288901",
       "payerEmail": "kavita.r@reddyrealty.in",
-      "baseAmount": 1000,
-      "cgst": 90,
-      "sgst": 90,
-      "totalGst": 180,
-      "totalAmount": 1180,
+      "payerGstin": "29AABCR7890K5Z9",
+      "payerAddress": "Plot 88, Reddy Complex, Whitefield Main Road, Bangalore, Karnataka - 560066",
+      "baseAmount": 800,
+      "cgst": 72,
+      "sgst": 72,
+      "totalGst": 144,
+      "totalAmount": 944,
       "status": "success",
-      "method": "Simulated Gateway (UPI)"
+      "method": "Simulated Gateway (UPI)",
+      "attended": false,
+      "attendedAt": null,
+      "giftCollected": false,
+      "giftCollectedAt": null
     }
   ],
   "emailLogs": [
@@ -454,7 +609,7 @@
       "recipientName": "Kavita Reddy",
       "subject": "CREA(I) Tax Invoice CREA/2627/TRN2/0014 - Executive Training",
       "invoiceNo": "CREA/2627/TRN2/0014",
-      "amount": 1180,
+      "amount": 944,
       "status": "Dispatched (Simulated SMTP)"
     }
   ]

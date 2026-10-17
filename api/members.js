@@ -1,4 +1,4 @@
-import { supabase, readLocalData, writeLocalData } from "../lib/supabase.js";
+import { supabase, readLocalData, writeLocalData, setMemberStatus, manualActivateMember } from "../lib/supabase.js";
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -15,7 +15,21 @@ export default async function handler(req, res) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-    const { member, bulkText } = body;
+    const { action, id, status, paymentMeans, description, createInvoice, headId, member, bulkText } = body;
+
+    // 1. Toggle member status
+    if (action === "toggle_status" || (id && status && !member && !bulkText)) {
+      const updated = await setMemberStatus(id, status);
+      return res.status(200).json({ success: true, member: updated });
+    }
+
+    // 2. Manual activation with payment means and description
+    if (action === "manual_activate") {
+      const result = await manualActivateMember({ id, paymentMeans, description, createInvoice, headId });
+      return res.status(200).json({ success: true, ...result });
+    }
+
+    // 3. Add individual or bulk members
     const newMembers = [];
 
     if (member) {
@@ -25,8 +39,17 @@ export default async function handler(req, res) {
         mobile: (member.mobile || "").trim(),
         email: (member.email || "").trim(),
         category: member.category || "member",
+        parentMemberId: member.parentMemberId || null,
+        parentMemberName: member.parentMemberName || null,
+        parentMemberMobile: member.parentMemberMobile || null,
+        gstin: member.gstin ? member.gstin.trim().toUpperCase() : null,
+        address: member.address ? member.address.trim() : null,
         company: member.company || "Independent Broker",
         city: member.city || "Bangalore",
+        status: member.status || "active",
+        lastPaidFY: member.lastPaidFY || "2627",
+        paymentMeans: member.paymentMeans || null,
+        activationNote: member.activationNote || null,
         joinedDate: new Date().toISOString().split("T")[0]
       });
     } else if (bulkText) {
@@ -42,6 +65,10 @@ export default async function handler(req, res) {
             category: parts[3] ? parts[3].toLowerCase().replace(/\s+/g, "_") : "member",
             company: parts[4] || "Real Estate Broker",
             city: "Bangalore",
+            status: "active",
+            lastPaidFY: "2627",
+            paymentMeans: null,
+            activationNote: null,
             joinedDate: new Date().toISOString().split("T")[0]
           });
         }
@@ -57,8 +84,17 @@ export default async function handler(req, res) {
             mobile: m.mobile,
             email: m.email,
             category: m.category,
+            parent_member_id: m.parentMemberId,
+            parent_member_name: m.parentMemberName,
+            parent_member_mobile: m.parentMemberMobile,
+            gstin: m.gstin,
+            address: m.address,
             company: m.company,
             city: m.city,
+            status: m.status,
+            last_paid_fy: m.lastPaidFY,
+            payment_means: m.paymentMeans,
+            activation_note: m.activationNote,
             joined_date: m.joinedDate
           }))
         );

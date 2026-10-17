@@ -7,6 +7,20 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="lib/qrcode.min.js"></script>
+  <script src="lib/jsqr.min.js"></script>
+  <script>
+    if (typeof qrcode === 'undefined') {
+      const s = document.createElement('script');
+      s.src = "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js";
+      document.head.appendChild(s);
+    }
+    if (typeof jsQR === 'undefined') {
+      const s2 = document.createElement('script');
+      s2.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js";
+      document.head.appendChild(s2);
+    }
+  </script>
   <style>
     :root {
       --bg-dark: #070b14;
@@ -192,6 +206,7 @@
     }
 
     .badge-member { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+    .badge-associate_member { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
     .badge-new_member { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
     .badge-board_member { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
     .badge-non_member { background: rgba(148, 163, 184, 0.15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3); }
@@ -199,6 +214,12 @@
     .badge-open { background: rgba(37, 99, 235, 0.15); color: #60a5fa; border: 1px solid rgba(37, 99, 235, 0.3); }
     .badge-active { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); }
     .badge-deactivated { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
+
+    @keyframes scanLaser {
+      0% { top: 6%; opacity: 0.8; }
+      50% { top: 92%; opacity: 1; }
+      100% { top: 6%; opacity: 0.8; }
+    }
 
     /* Buttons */
     .btn {
@@ -474,9 +495,13 @@
     const app = {
       currentTab: "member",
       loggedInMember: null, // Holds active member profile
-      guestInfo: { name: "", mobile: "", email: "" },
+      guestInfo: { name: "", mobile: "", email: "", gstin: "", address: "" },
       adminPin: "crea-admin",
       isAdminAuthenticated: false,
+      activeScannerStream: null,
+      scannerAnimFrame: null,
+      lastScannedCode: null,
+      lastScanTime: 0,
       
       // Filters for Admin
       adminFilter: {
@@ -528,12 +553,120 @@
         this.normalizeData();
       },
 
+      getFinancialYear(date = new Date()) {
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = d.getMonth() + 1; // 1-12
+        let startYear, endYear;
+        if (month >= 4) {
+          startYear = year;
+          endYear = year + 1;
+        } else {
+          startYear = year - 1;
+          endYear = year;
+        }
+        const startStr = String(startYear).slice(-2);
+        const endStr = String(endYear).slice(-2);
+        return {
+          code: `${startStr}${endStr}`,
+          label: `FY ${startYear}-${String(endYear).slice(-2)}`,
+          fullLabel: `${startYear}-${endYear}`,
+          startYear,
+          endYear
+        };
+      },
+
       normalizeData() {
         if (!this.data) return;
         if (!this.data.heads) this.data.heads = [];
         this.data.heads.forEach(h => {
           if (!h.status) h.status = "active";
+          if (h.prices && h.prices.new_member !== undefined && h.prices.associate_member === undefined) {
+            h.prices.associate_member = h.prices.new_member;
+          }
         });
+
+        if (!this.data.members) this.data.members = [];
+        const fy = this.getFinancialYear();
+
+        // Pass 1: Evaluate Regular & Board Members
+        this.data.members.forEach(m => {
+          if (m.category === "new_member") m.category = "associate_member";
+
+          if (m.category !== "associate_member") {
+            const hasPaidCurrentFY = m.lastPaidFY === fy.code || (this.data.payments || []).some(p =>
+              (p.payerId === m.id || p.payerMobile === m.mobile) &&
+              (p.headCode === "MEM" || (p.headTitle && p.headTitle.toLowerCase().includes("membership"))) &&
+              p.status === "success" &&
+              (p.invoiceNo && p.invoiceNo.includes(fy.code))
+            );
+
+            if (hasPaidCurrentFY) {
+              if (m.status !== "deactivated_manual") {
+                m.status = "active";
+                m.lastPaidFY = fy.code;
+              }
+            } else {
+              // 1st April Rule: Deactivate if unpaid for current FY
+              if (m.status !== "active_manual") {
+                m.status = "deactivated";
+                m.activationNote = m.activationNote || `Pending ${fy.label} Annual Renewal`;
+              }
+            }
+          }
+        });
+
+        // Pass 2: Evaluate Associate Members (DEPENDENT on Main Member!)
+        this.data.members.forEach(m => {
+          if (m.category === "associate_member") {
+            const mainMember = this.data.members.find(p => p.id === m.parentMemberId || p.mobile === m.parentMemberMobile);
+            const isMainMemberActive = mainMember && mainMember.status === "active" && mainMember.lastPaidFY === fy.code;
+
+            const hasAssociatePaid = m.lastPaidFY === fy.code || (this.data.payments || []).some(p =>
+              (p.payerId === m.id || p.payerMobile === m.mobile) &&
+              (p.headCode === "MEM" || (p.headTitle && p.headTitle.toLowerCase().includes("membership"))) &&
+              p.status === "success" &&
+              (p.invoiceNo && p.invoiceNo.includes(fy.code))
+            );
+
+            // Strict Rule: Main member MUST be active and paid.
+            // If main member is unpaid, associate is DEACTIVATED irrespective of associate payment!
+            if (!isMainMemberActive) {
+              m.status = "deactivated";
+              m.deactivationReason = `Main Member (${mainMember ? mainMember.name : "Unassigned"}) membership unpaid for ${fy.label}`;
+              m.activationNote = `Deactivated: Main Member (${mainMember ? mainMember.name : "Unassigned"}) has not paid FY dues`;
+            } else if (!hasAssociatePaid) {
+              m.status = "deactivated";
+              m.deactivationReason = `Associate Member renewal fee pending for ${fy.label}`;
+              m.activationNote = `Pending Associate Member Renewal for ${fy.label}`;
+            } else {
+              m.status = "active";
+              m.lastPaidFY = fy.code;
+            }
+          }
+        });
+
+        // Sync loggedInMember session if active
+        if (this.loggedInMember) {
+          const fresh = this.data.members.find(m => m.id === this.loggedInMember.id || m.mobile === this.loggedInMember.mobile);
+          if (fresh) {
+            this.loggedInMember = { ...fresh };
+          }
+        }
+      },
+
+      generateQR(payload, size = 3) {
+        if (typeof qrcode !== 'undefined') {
+          try {
+            const qr = qrcode(0, 'M');
+            qr.addData(payload);
+            qr.make();
+            return qr.createSvgTag(size, 2);
+          } catch(e) {
+            console.warn("QR generation error:", e);
+          }
+        }
+        return `<svg width="85" height="85" viewBox="0 0 100 100" style="background:#0f172a; border-radius:4px;"><rect width="100" height="100" fill="#0f172a"/><text x="50" y="55" fill="#38bdf8" font-size="11" text-anchor="middle" font-family="monospace">QR PASS</text></svg>`;
       },
 
       escapeHtml(str) {
@@ -551,29 +684,31 @@
       },
 
       getDefaultStore() {
-        const fy = "2627";
+        const fy = this.getFinancialYear();
         return {
           invoiceCounter: 14,
           members: [
-            { id: "mem-001", name: "Ramesh Gupta", mobile: "9800000001", email: "ramesh.gupta@crea-realty.in", category: "member", company: "Apex Prime Realty", city: "Bangalore" },
-            { id: "mem-002", name: "Sneha Patel", mobile: "9800000002", email: "sneha.p@lotushomes.co", category: "new_member", company: "Lotus Property Consultants", city: "Bangalore" },
-            { id: "mem-003", name: "Vikramaditya Rao", mobile: "9800000003", email: "v.rao@deccanproperties.com", category: "board_member", company: "Deccan Realtors & Estates", city: "Bangalore" },
-            { id: "mem-004", name: "Anand Murthy", mobile: "9845999000", email: "anand.m@staypolis.com", category: "member", company: "Staypolis Brokerage", city: "Bangalore" },
-            { id: "mem-005", name: "Kavita Reddy", mobile: "9711288901", email: "kavita.r@reddyrealty.in", category: "new_member", company: "Reddy Associates", city: "Bangalore" }
+            { id: "mem-001", name: "Ramesh Gupta", mobile: "9800000001", email: "ramesh.gupta@crea-realty.in", category: "member", company: "Apex Prime Realty", city: "Bangalore", gstin: "29AABCR1234F1Z5", address: "Suite 401, Prestige Meridian, MG Road, Bangalore, Karnataka - 560001", status: "active", lastPaidFY: fy.code, paymentMeans: "Online Gateway", activationNote: `Paid Online (Inv: CREA/${fy.code}/MEM/0001)` },
+            { id: "mem-002", name: "Sneha Patel", mobile: "9800000002", email: "sneha.p@lotushomes.co", category: "associate_member", parentMemberId: "mem-001", parentMemberName: "Ramesh Gupta", parentMemberMobile: "9800000001", company: "Apex Prime Realty / Lotus Homes", city: "Bangalore", gstin: "29AABCL5678G2Z1", address: "#12, Lotus Arcade, 100ft Road, Indiranagar, Bangalore, Karnataka - 560038", status: "active", lastPaidFY: fy.code, paymentMeans: "Online Gateway", activationNote: "Associate Fee Paid (Main Member Ramesh Gupta Active)" },
+            { id: "mem-003", name: "Vikramaditya Rao", mobile: "9800000003", email: "v.rao@deccanproperties.com", category: "board_member", company: "Deccan Realtors & Estates", city: "Bangalore", gstin: "29AABCD9012H3Z7", address: "Ground Floor, Deccan Chambers, Lavelle Road, Bangalore, Karnataka - 560001", status: "active", lastPaidFY: fy.code, paymentMeans: "Online Gateway", activationNote: "Board Member Exemption / Paid" },
+            { id: "mem-004", name: "Anand Murthy", mobile: "9845999000", email: "anand.m@staypolis.com", category: "member", company: "Staypolis Brokerage", city: "Bangalore", gstin: "29AABCS3456J4Z3", address: "Unit 3B, Brigade Gateway, Malleshwaram, Bangalore, Karnataka - 560055", status: "active", lastPaidFY: fy.code, paymentMeans: "Online Gateway", activationNote: `Renewed ${fy.label}` },
+            { id: "mem-005", name: "Kavita Reddy", mobile: "9711288901", email: "kavita.r@reddyrealty.in", category: "associate_member", parentMemberId: "mem-004", parentMemberName: "Anand Murthy", parentMemberMobile: "9845999000", company: "Staypolis / Reddy Associates", city: "Bangalore", gstin: "29AABCR7890K5Z9", address: "Plot 88, Reddy Complex, Whitefield Main Road, Bangalore, Karnataka - 560066", status: "deactivated", lastPaidFY: null, paymentMeans: null, activationNote: `Pending Associate Renewal Dues for ${fy.label}` },
+            { id: "mem-006", name: "Rahul Varma", mobile: "9880011224", email: "rahul.v@varmarealty.com", category: "associate_member", parentMemberId: "mem-007", parentMemberName: "Sunita Sharma", parentMemberMobile: "9988776655", company: "Embassy Realty / Varma Realty", city: "Bangalore", gstin: "29AABCV9988P1Z2", address: "#44, Varma Towers, Koramangala 5th Block, Bangalore, Karnataka - 560095", status: "deactivated", lastPaidFY: fy.code, paymentMeans: "Online Gateway", activationNote: `Deactivated: Main Member (Sunita Sharma) has not paid ${fy.label} dues` },
+            { id: "mem-007", name: "Sunita Sharma", mobile: "9988776655", email: "sunita.sharma@embassyrealty.in", category: "member", company: "Embassy Square Realty", city: "Bangalore", gstin: "29AABCS1122M3Z4", address: "Level 2, Embassy Square, Infantry Road, Bangalore, Karnataka - 560001", status: "deactivated", lastPaidFY: null, paymentMeans: null, activationNote: `Pending ${fy.label} Annual Renewal` }
           ],
           heads: [
             {
               id: "head-mem",
               code: "MEM",
-              title: "Annual CREA(I) Membership 2026-2027",
+              title: `Annual CREA(I) Membership ${fy.fullLabel || '2026-2027'}`,
               type: "membership",
-              eventDate: "2026-04-01",
+              eventDate: `${fy.startYear || '2026'}-04-01`,
               eventTime: "Full Year Access",
               venue: "CREA(I) Headquarters & All Chapters",
-              activeUntil: "2027-03-31T23:59:59",
+              activeUntil: `${fy.endYear || '2027'}-03-31T23:59:59`,
               status: "active",
-              prices: { new_member: 12000, member: 10000, board_member: 8000, non_member: null },
-              writeup: "The Confederation of Real Estate Associates (India) — CREA(I) is the premier self-regulatory association of professional real estate brokers, property managers, and valuation experts in South India.\n\nYour annual membership subscription for FY 2026-2027 entitles your firm to comprehensive professional standing, legal assistance on brokerage covenant disputes, and direct integration into the CREA Multi-Listing Exchange (MLE). Over the past twelve months, CREA(I) mediated over 140 commercial leasing transactions and spearheaded ethical commission standardization benchmarks across residential corridors.\n\nKey Member Privileges:\n1. Official CREA(I) Certified Realtor Certificate and verified digital credentials for client trust.\n2. Direct access to our monthly Legal & Notary clinic for RERA complaints, draft scrutiny, and deposit escrow guidance.\n3. Preferential registration rates on all accredited broker mastery certifications and quarterly state symposia.\n4. Comprehensive arbitration board access in the event of client or fellow broker commission evasion.\n5. Complimentary entry to the bi-annual Property Showcase networking breakfasts with tier-1 developers including Prestige, Sobha, and Brigade.\n\nMembers are requested to complete renewal promptly to prevent de-listing from the public verified realtor register."
+              prices: { associate_member: 5000, member: 10000, board_member: 8000, non_member: null },
+              writeup: "The Confederation of Real Estate Associates (India) — CREA(I) is the premier self-regulatory association of professional real estate brokers, property managers, and valuation experts in South India.\n\nYour annual membership subscription entitles your firm to comprehensive professional standing, legal assistance on brokerage covenant disputes, and direct integration into the CREA Multi-Listing Exchange (MLE). Over the past twelve months, CREA(I) mediated over 140 commercial leasing transactions and spearheaded ethical commission standardization benchmarks across residential corridors.\n\nKey Member Privileges:\n1. Official CREA(I) Certified Realtor Certificate and verified digital credentials for client trust.\n2. Direct access to our monthly Legal & Notary clinic for RERA complaints, draft scrutiny, and deposit escrow guidance.\n3. Preferential registration rates on all accredited broker mastery certifications and quarterly state symposia.\n4. Comprehensive arbitration board access in the event of client or fellow broker commission evasion.\n5. Complimentary entry to the bi-annual Property Showcase networking breakfasts with tier-1 developers including Prestige, Sobha, and Brigade.\n\nMembers are requested to complete renewal promptly to prevent de-listing from the public verified realtor register."
             },
             {
               id: "head-trn1",
@@ -585,7 +720,7 @@
               venue: "The Lalit Hotel, High Grounds, Bangalore",
               activeUntil: "2026-10-28T09:00:00",
               status: "active",
-              prices: { new_member: 1500, member: 1200, board_member: 0, non_member: 2500 },
+              prices: { associate_member: 1200, member: 1200, board_member: 0, non_member: 2500 },
               writeup: "RERA litigation and title verification scrutiny have transformed real estate transactions into rigorous legal engagements. This full-day intensive masterclass is curated specifically for practicing real estate brokers, leasing executives, and independent agents seeking to eliminate liability and elevate deal closings.\n\nLed by Senior Advocate & Real Estate Arbitrator Mr. Ajay Venkatesh along with seasoned land revenue experts, this masterclass delves into practical title search methodologies across Karnataka land records including RTC (Pahani), Encumbrance Certificates (Form 15 & 16), Katha extract nuances (e-Katha vs A-Katha vs B-Katha), and BDA/BMRDA layout approval checks.\n\nKey Highlights of the Syllabus:\n1. Identifying encumbrances, litigation flags, and revenue dispute caveats before listing properties.\n2. Formulating watertight rental and sale agreements that safeguard broker commissions against client circumvention.\n3. RERA Section 9 and 10 agent compliance mandates, annual filings, and advertising dos and don'ts.\n4. Managing client advance tokens and escrow protocol to safeguard earnest deposits.\n5. Interactive case studies on 5 high-profile land title defects resolved in Bangalore courts.\n\nIncludes accredited certification, comprehensive take-home legal draft toolkit on pendrive, gourmet lunch, and high-tea networking with senior legal professionals."
             },
             {
@@ -598,7 +733,7 @@
               venue: "Virtual Live Interactive Studio (Zoom HD)",
               activeUntil: "2026-11-18T13:30:00",
               status: "active",
-              prices: { new_member: 1000, member: 800, board_member: 0, non_member: 1800 },
+              prices: { associate_member: 800, member: 800, board_member: 0, non_member: 1800 },
               writeup: "High-net-worth individuals and Non-Resident Indians (NRIs) represent over 38% of luxury real estate purchases and premium commercial leasing volume in metropolitan Bangalore. Reaching and qualifying these diaspora investors requires sophisticated digital acquisition funnels beyond conventional classifieds.\n\nThis intensive interactive webinar equips real estate professionals with automated lead generation systems, WhatsApp Business automation workflows, and high-converting performance marketing campaigns on Google Search and Meta Ads.\n\nWorkshop Outline:\n1. Setting up geo-targeted campaigns targeting NRI hubs in the UAE, United States, United Kingdom, and Singapore.\n2. Crafting video walkthrough presentations that convert remote NRI buyers without requiring physical property visits.\n3. Automated WhatsApp CRM workflows for immediate lead engagement within 90 seconds of portal inquiry.\n4. Navigating FEMA regulations, NRE/NRO bank accounts, repatriation covenants, and Power of Attorney (PoA) stamping.\n5. Live demonstration of AI tools for generating property inspection reports and personalized investor pitch decks.\n\nParticipants will receive ready-to-deploy ad copy templates, email sequences, and a recording valid for 12 months."
             },
             {
@@ -611,29 +746,22 @@
               venue: "Grand Ballroom, ITC Windsor, Golf Course Road, Bangalore",
               activeUntil: "2026-12-12T17:00:00",
               status: "active",
-              prices: { new_member: 3500, member: 2800, board_member: 2000, non_member: 5000 },
+              prices: { associate_member: 2800, member: 2800, board_member: 2000, non_member: 5000 },
               writeup: "The Confederation of Real Estate Associates (India) cordially invites you to our flagship annual gathering — the CREA(I) Annual Realty Conclave & Networking Gala 2026. This landmark evening brings together over 400 distinguished real estate brokers, developers, legal luminaries, and government dignitaries under one roof.\n\nTheme for 2026: 'The Next Decade of Urban Mobility & PropTech Growth in Bangalore'.\n\nEvening Itinerary:\n- 06:00 PM - Registration & Welcome High Tea\n- 06:45 PM - Keynote Address by Hon'ble Minister for Housing & Urban Infrastructure\n- 07:30 PM - Panel Discussion: Infrastructure corridors (Metro Phase 3, PRR & STRR) shaping high-yield residential clusters\n- 08:30 PM - Presentation of the CREA(I) Excellence Awards recognizing top brokerages across South India\n- 09:15 PM - Cocktail Reception, Gala Dinner & Unveiling of the CREA Property Research Whitepaper 2027\n\nDress Code: Formal Western / Indian Traditional Formal.\nComplimentary valet parking available at the venue."
             }
           ],
           payments: [
-            { id: "pay-101", invoiceNo: `CREA/${fy}/MEM/0001`, serial: 1, date: "2026-08-05T10:15:00.000Z", headId: "head-mem", headCode: "MEM", headTitle: "Annual CREA(I) Membership 2026-2027", payerType: "member", payerCategory: "member", payerId: "mem-001", payerName: "Ramesh Gupta", payerMobile: "9800000001", payerEmail: "ramesh.gupta@crea-realty.in", baseAmount: 10000, cgst: 900, sgst: 900, totalGst: 1800, totalAmount: 11800, status: "success" },
-            { id: "pay-102", invoiceNo: `CREA/${fy}/MEM/0002`, serial: 2, date: "2026-08-07T14:20:00.000Z", headId: "head-mem", headCode: "MEM", headTitle: "Annual CREA(I) Membership 2026-2027", payerType: "member", payerCategory: "board_member", payerId: "mem-003", payerName: "Vikramaditya Rao", payerMobile: "9800000003", payerEmail: "v.rao@deccanproperties.com", baseAmount: 8000, cgst: 720, sgst: 720, totalGst: 1440, totalAmount: 9440, status: "success" },
-            { id: "pay-103", invoiceNo: `CREA/${fy}/MEM/0003`, serial: 3, date: "2026-08-14T11:05:00.000Z", headId: "head-mem", headCode: "MEM", headTitle: "Annual CREA(I) Membership 2026-2027", payerType: "member", payerCategory: "new_member", payerId: "mem-002", payerName: "Sneha Patel", payerMobile: "9800000002", payerEmail: "sneha.p@lotushomes.co", baseAmount: 12000, cgst: 1080, sgst: 1080, totalGst: 2160, totalAmount: 14160, status: "success" },
-            { id: "pay-104", invoiceNo: `CREA/${fy}/TRN1/0004`, serial: 4, date: "2026-08-20T09:40:00.000Z", headId: "head-trn1", headCode: "TRN1", headTitle: "Masterclass: RERA Compliance, Title Verification & Escrows", payerType: "member", payerCategory: "member", payerId: "mem-001", payerName: "Ramesh Gupta", payerMobile: "9800000001", payerEmail: "ramesh.gupta@crea-realty.in", baseAmount: 1200, cgst: 108, sgst: 108, totalGst: 216, totalAmount: 1416, status: "success" },
-            { id: "pay-105", invoiceNo: `CREA/${fy}/TRN1/0005`, serial: 5, date: "2026-08-22T16:15:00.000Z", headId: "head-trn1", headCode: "TRN1", headTitle: "Masterclass: RERA Compliance, Title Verification & Escrows", payerType: "non_member", payerCategory: "non_member", payerId: null, payerName: "Siddharth Joshi", payerMobile: "9845112233", payerEmail: "sid.joshi@urbanestates.in", baseAmount: 2500, cgst: 225, sgst: 225, totalGst: 450, totalAmount: 2950, status: "success" },
-            { id: "pay-106", invoiceNo: `CREA/${fy}/MEM/0006`, serial: 6, date: "2026-09-01T10:00:00.000Z", headId: "head-mem", headCode: "MEM", headTitle: "Annual CREA(I) Membership 2026-2027", payerType: "member", payerCategory: "member", payerId: "mem-004", payerName: "Anand Murthy", payerMobile: "9845999000", payerEmail: "anand.m@staypolis.com", baseAmount: 10000, cgst: 900, sgst: 900, totalGst: 1800, totalAmount: 11800, status: "success" },
-            { id: "pay-107", invoiceNo: `CREA/${fy}/TRN1/0007`, serial: 7, date: "2026-09-04T12:30:00.000Z", headId: "head-trn1", headCode: "TRN1", headTitle: "Masterclass: RERA Compliance, Title Verification & Escrows", payerType: "member", payerCategory: "new_member", payerId: "mem-002", payerName: "Sneha Patel", payerMobile: "9800000002", payerEmail: "sneha.p@lotushomes.co", baseAmount: 1500, cgst: 135, sgst: 135, totalGst: 270, totalAmount: 1770, status: "success" },
-            { id: "pay-108", invoiceNo: `CREA/${fy}/TRN1/0008`, serial: 8, date: "2026-09-06T15:45:00.000Z", headId: "head-trn1", headCode: "TRN1", headTitle: "Masterclass: RERA Compliance, Title Verification & Escrows", payerType: "non_member", payerCategory: "non_member", payerId: null, payerName: "Deepak Mehra", payerMobile: "9820011223", payerEmail: "deepak@mehraproperty.com", baseAmount: 2500, cgst: 225, sgst: 225, totalGst: 450, totalAmount: 2950, status: "success" },
-            { id: "pay-109", invoiceNo: `CREA/${fy}/TRN2/0009`, serial: 9, date: "2026-09-12T11:20:00.000Z", headId: "head-trn2", headCode: "TRN2", headTitle: "Executive Training: Digital Lead Generation & NRI Client Acquisition", payerType: "member", payerCategory: "member", payerId: "mem-001", payerName: "Ramesh Gupta", payerMobile: "9800000001", payerEmail: "ramesh.gupta@crea-realty.in", baseAmount: 800, cgst: 72, sgst: 72, totalGst: 144, totalAmount: 944, status: "success" },
-            { id: "pay-110", invoiceNo: `CREA/${fy}/TRN2/0010`, serial: 10, date: "2026-09-15T17:10:00.000Z", headId: "head-trn2", headCode: "TRN2", headTitle: "Executive Training: Digital Lead Generation & NRI Client Acquisition", payerType: "non_member", payerCategory: "non_member", payerId: null, payerName: "Harish Bhatia", payerMobile: "9876543210", payerEmail: "harish@bhatiarealtors.in", baseAmount: 1800, cgst: 162, sgst: 162, totalGst: 324, totalAmount: 2124, status: "success" },
-            { id: "pay-111", invoiceNo: `CREA/${fy}/EVT1/0011`, serial: 11, date: "2026-09-22T14:00:00.000Z", headId: "head-evt1", headCode: "EVT1", headTitle: "CREA(I) Annual Realty Conclave & Networking Gala 2026", payerType: "member", payerCategory: "board_member", payerId: "mem-003", payerName: "Vikramaditya Rao", payerMobile: "9800000003", payerEmail: "v.rao@deccanproperties.com", baseAmount: 2000, cgst: 180, sgst: 180, totalGst: 360, totalAmount: 2360, status: "success" },
-            { id: "pay-112", invoiceNo: `CREA/${fy}/EVT1/0012`, serial: 12, date: "2026-09-28T18:30:00.000Z", headId: "head-evt1", headCode: "EVT1", headTitle: "CREA(I) Annual Realty Conclave & Networking Gala 2026", payerType: "member", payerCategory: "member", payerId: "mem-001", payerName: "Ramesh Gupta", payerMobile: "9800000001", payerEmail: "ramesh.gupta@crea-realty.in", baseAmount: 2800, cgst: 252, sgst: 252, totalGst: 504, totalAmount: 3304, status: "success" },
-            { id: "pay-113", invoiceNo: `CREA/${fy}/EVT1/0013`, serial: 13, date: "2026-10-02T10:45:00.000Z", headId: "head-evt1", headCode: "EVT1", headTitle: "CREA(I) Annual Realty Conclave & Networking Gala 2026", payerType: "non_member", payerCategory: "non_member", payerId: null, payerName: "Pooja Venkatesh", payerMobile: "9900112233", payerEmail: "pooja.v@greenviewbuilders.com", baseAmount: 5000, cgst: 450, sgst: 450, totalGst: 900, totalAmount: 5900, status: "success" },
-            { id: "pay-114", invoiceNo: `CREA/${fy}/TRN2/0014`, serial: 14, date: "2026-10-10T16:20:00.000Z", headId: "head-trn2", headCode: "TRN2", headTitle: "Executive Training: Digital Lead Generation & NRI Client Acquisition", payerType: "member", payerCategory: "new_member", payerId: "mem-005", payerName: "Kavita Reddy", payerMobile: "9711288901", payerEmail: "kavita.r@reddyrealty.in", baseAmount: 1000, cgst: 90, sgst: 90, totalGst: 180, totalAmount: 1180, status: "success" }
+            { id: "pay-101", invoiceNo: `CREA/${fy.code}/MEM/0001`, serial: 1, date: "2026-08-05T10:15:00.000Z", headId: "head-mem", headCode: "MEM", headTitle: `Annual CREA(I) Membership ${fy.fullLabel || '2026-2027'}`, payerType: "member", payerCategory: "member", payerId: "mem-001", payerName: "Ramesh Gupta", payerMobile: "9800000001", payerEmail: "ramesh.gupta@crea-realty.in", payerGstin: "29AABCR1234F1Z5", payerAddress: "Suite 401, Prestige Meridian, MG Road, Bangalore", baseAmount: 10000, cgst: 900, sgst: 900, totalGst: 1800, totalAmount: 11800, status: "success", attended: false, attendedAt: null, giftCollected: false, giftCollectedAt: null },
+            { id: "pay-102", invoiceNo: `CREA/${fy.code}/MEM/0002`, serial: 2, date: "2026-08-07T14:20:00.000Z", headId: "head-mem", headCode: "MEM", headTitle: `Annual CREA(I) Membership ${fy.fullLabel || '2026-2027'}`, payerType: "member", payerCategory: "board_member", payerId: "mem-003", payerName: "Vikramaditya Rao", payerMobile: "9800000003", payerEmail: "v.rao@deccanproperties.com", payerGstin: "29AABCD9012H3Z7", payerAddress: "Ground Floor, Deccan Chambers, Lavelle Road, Bangalore", baseAmount: 8000, cgst: 720, sgst: 720, totalGst: 1440, totalAmount: 9440, status: "success", attended: false, attendedAt: null, giftCollected: false, giftCollectedAt: null },
+            { id: "pay-103", invoiceNo: `CREA/${fy.code}/MEM/0003`, serial: 3, date: "2026-08-14T11:05:00.000Z", headId: "head-mem", headCode: "MEM", headTitle: `Annual CREA(I) Membership ${fy.fullLabel || '2026-2027'}`, payerType: "member", payerCategory: "associate_member", payerId: "mem-002", payerName: "Sneha Patel", payerMobile: "9800000002", payerEmail: "sneha.p@lotushomes.co", payerGstin: "29AABCL5678G2Z1", payerAddress: "#12, Lotus Arcade, 100ft Road, Indiranagar, Bangalore", baseAmount: 5000, cgst: 450, sgst: 450, totalGst: 900, totalAmount: 5900, status: "success", attended: false, attendedAt: null, giftCollected: false, giftCollectedAt: null },
+            { id: "pay-104", invoiceNo: `CREA/${fy.code}/TRN1/0004`, serial: 4, date: "2026-08-20T09:40:00.000Z", headId: "head-trn1", headCode: "TRN1", headTitle: "Masterclass: RERA Compliance, Title Verification & Escrows", payerType: "member", payerCategory: "member", payerId: "mem-001", payerName: "Ramesh Gupta", payerMobile: "9800000001", payerEmail: "ramesh.gupta@crea-realty.in", payerGstin: "29AABCR1234F1Z5", payerAddress: "Suite 401, Prestige Meridian, MG Road, Bangalore", baseAmount: 1200, cgst: 108, sgst: 108, totalGst: 216, totalAmount: 1416, status: "success", attended: true, attendedAt: "2026-10-28T09:55:00.000Z", giftCollected: true, giftCollectedAt: "2026-10-28T10:15:00.000Z" },
+            { id: "pay-105", invoiceNo: `CREA/${fy.code}/TRN1/0005`, serial: 5, date: "2026-08-22T16:15:00.000Z", headId: "head-trn1", headCode: "TRN1", headTitle: "Masterclass: RERA Compliance, Title Verification & Escrows", payerType: "non_member", payerCategory: "non_member", payerId: null, payerName: "Siddharth Joshi", payerMobile: "9845112233", payerEmail: "sid.joshi@urbanestates.in", payerGstin: "29AAACJ1122K1Z9", payerAddress: "Urban Estates, 4th Block, Koramangala, Bangalore", baseAmount: 2500, cgst: 225, sgst: 225, totalGst: 450, totalAmount: 2950, status: "success", attended: true, attendedAt: "2026-10-28T10:02:00.000Z", giftCollected: false, giftCollectedAt: null },
+            { id: "pay-106", invoiceNo: `CREA/${fy.code}/MEM/0006`, serial: 6, date: "2026-09-01T10:00:00.000Z", headId: "head-mem", headCode: "MEM", headTitle: `Annual CREA(I) Membership ${fy.fullLabel || '2026-2027'}`, payerType: "member", payerCategory: "member", payerId: "mem-004", payerName: "Anand Murthy", payerMobile: "9845999000", payerEmail: "anand.m@staypolis.com", payerGstin: "29AABCS3456J4Z3", payerAddress: "Unit 3B, Brigade Gateway, Malleshwaram, Bangalore", baseAmount: 10000, cgst: 900, sgst: 900, totalGst: 1800, totalAmount: 11800, status: "success", attended: false, attendedAt: null, giftCollected: false, giftCollectedAt: null },
+            { id: "pay-107", invoiceNo: `CREA/${fy.code}/TRN1/0007`, serial: 7, date: "2026-09-04T12:30:00.000Z", headId: "head-trn1", headCode: "TRN1", headTitle: "Masterclass: RERA Compliance, Title Verification & Escrows", payerType: "member", payerCategory: "associate_member", payerId: "mem-002", payerName: "Sneha Patel", payerMobile: "9800000002", payerEmail: "sneha.p@lotushomes.co", payerGstin: "29AABCL5678G2Z1", payerAddress: "#12, Lotus Arcade, 100ft Road, Indiranagar, Bangalore", baseAmount: 1200, cgst: 108, sgst: 108, totalGst: 216, totalAmount: 1416, status: "success", attended: false, attendedAt: null, giftCollected: false, giftCollectedAt: null },
+            { id: "pay-108", invoiceNo: `CREA/${fy.code}/TRN1/0008`, serial: 8, date: "2026-09-06T15:45:00.000Z", headId: "head-trn1", headCode: "TRN1", headTitle: "Masterclass: RERA Compliance, Title Verification & Escrows", payerType: "non_member", payerCategory: "non_member", payerId: null, payerName: "Deepak Mehra", payerMobile: "9820011223", payerEmail: "deepak@mehraproperty.com", payerGstin: "", payerAddress: "Mehra Properties, Indiranagar, Bangalore", baseAmount: 2500, cgst: 225, sgst: 225, totalGst: 450, totalAmount: 2950, status: "success", attended: false, attendedAt: null, giftCollected: false, giftCollectedAt: null }
           ],
           emailLogs: [
-            { id: "log-1", timestamp: "2026-08-05T10:15:02.000Z", recipient: "ramesh.gupta@crea-realty.in", recipientName: "Ramesh Gupta", subject: `CREA(I) Tax Invoice CREA/${fy}/MEM/0001 - Annual Membership 2026-2027`, invoiceNo: `CREA/${fy}/MEM/0001`, amount: 11800, status: "Dispatched (Simulated SMTP)" },
-            { id: "log-14", timestamp: "2026-10-10T16:20:05.000Z", recipient: "kavita.r@reddyrealty.in", recipientName: "Kavita Reddy", subject: `CREA(I) Tax Invoice CREA/${fy}/TRN2/0014 - Executive Training`, invoiceNo: `CREA/${fy}/TRN2/0014`, amount: 1180, status: "Dispatched (Simulated SMTP)" }
+            { id: "log-1", timestamp: "2026-08-05T10:15:02.000Z", recipient: "ramesh.gupta@crea-realty.in", recipientName: "Ramesh Gupta", subject: `CREA(I) Tax Invoice CREA/${fy.code}/MEM/0001 - Annual Membership`, invoiceNo: `CREA/${fy.code}/MEM/0001`, amount: 11800, status: "Dispatched (Simulated SMTP)" }
           ]
         };
       },
@@ -650,7 +778,7 @@
       renderMemberPortal() {
         if (!this.loggedInMember) {
           return `
-            <div style="max-width: 480px; margin: 40px auto;" class="glass-card">
+            <div style="max-width: 520px; margin: 40px auto;" class="glass-card">
               <div style="text-align: center; margin-bottom: 24px;">
                 <div style="width: 50px; height: 50px; border-radius: 12px; background: rgba(37, 99, 235, 0.2); border: 1px solid rgba(56, 189, 248, 0.3); display: inline-flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 12px;">
                   👤
@@ -666,16 +794,28 @@
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                   <button onclick="app.loginDemo('9800000001')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500;">
-                    <span>Ramesh Gupta (Regular Member)</span>
+                    <span>Ramesh Gupta (Regular Member — Active)</span>
                     <span class="badge badge-member">9800000001</span>
                   </button>
                   <button onclick="app.loginDemo('9800000002')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500;">
-                    <span>Sneha Patel (New Member)</span>
-                    <span class="badge badge-new_member">9800000002</span>
+                    <span>Sneha Patel (Associate Member — Active, Main: Ramesh)</span>
+                    <span class="badge badge-associate_member">9800000002</span>
                   </button>
                   <button onclick="app.loginDemo('9800000003')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500;">
-                    <span>Vikramaditya Rao (Board Member)</span>
+                    <span>Vikramaditya Rao (Board Member — Active)</span>
                     <span class="badge badge-board_member">9800000003</span>
+                  </button>
+                  <button onclick="app.loginDemo('9711288901')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500; border-color: rgba(239, 68, 68, 0.35);">
+                    <span style="color: #fca5a5;">Kavita Reddy (Associate — Deactivated: Own Fee Unpaid)</span>
+                    <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">9711288901</span>
+                  </button>
+                  <button onclick="app.loginDemo('9880011224')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500; border-color: rgba(239, 68, 68, 0.35);">
+                    <span style="color: #fca5a5;">Rahul Varma (Associate — Deactivated: Parent Unpaid)</span>
+                    <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">9880011224</span>
+                  </button>
+                  <button onclick="app.loginDemo('9988776655')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500; border-color: rgba(239, 68, 68, 0.35);">
+                    <span style="color: #fca5a5;">Sunita Sharma (Regular Member — Deactivated: Unpaid)</span>
+                    <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">9988776655</span>
                   </button>
                 </div>
               </div>
@@ -696,12 +836,17 @@
         // Member is logged in
         const member = this.loggedInMember;
         const now = new Date();
+        const fy = this.getFinancialYear();
 
-        // Heads visible to this member's category
+        // Heads visible to this member's category - sort MEM first
         const visibleHeads = this.data.heads.filter(h => {
           const price = h.prices[member.category];
           return price !== null && price !== undefined;
-        });
+        }).sort((a, b) => (a.code === 'MEM' ? -1 : b.code === 'MEM' ? 1 : 0));
+
+        // Find current membership head
+        const memHead = this.data.heads.find(h => h.code === 'MEM');
+        const isMemPaid = this.data.payments.some(p => (p.payerId === member.id || p.payerMobile === member.mobile) && (p.headCode === 'MEM' || (p.headTitle && p.headTitle.includes('Membership'))) && p.status === 'success');
 
         // Map payments for this member
         const memberPayments = this.data.payments.filter(p => p.payerId === member.id || p.payerMobile === member.mobile);
@@ -714,12 +859,18 @@
                 ${member.name.charAt(0)}
               </div>
               <div>
-                <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                   <h2 style="font-size: 20px; font-weight: 700;">${member.name}</h2>
                   <span class="badge badge-${member.category}">${member.category.replace('_', ' ')}</span>
+                  ${member.status === 'active' ? `
+                    <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.5);">● ACTIVE (${fy.label})</span>
+                  ` : `
+                    <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.5);">○ DEACTIVATED (PENDING ${fy.label} RENEWAL)</span>
+                  `}
                 </div>
                 <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
                   🏢 ${member.company || 'CREA Associate'} • 📞 +91 ${member.mobile} • ✉️ ${member.email}
+                  ${member.activationNote ? ` • <span style="color: #38bdf8;">${member.activationNote}</span>` : ''}
                 </div>
               </div>
             </div>
@@ -730,6 +881,35 @@
               </button>
             </div>
           </div>
+
+          <!-- 1st April Auto-Deactivation Notice for Members Pending Renewal -->
+          ${member.status === 'deactivated' ? `
+            <div class="glass-card" style="border: 2px solid #ef4444; background: linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(127, 29, 29, 0.08) 100%); margin-bottom: 24px; padding: 20px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                <div style="display: flex; gap: 14px; align-items: flex-start;">
+                  <span style="font-size: 32px;">⚠️</span>
+                  <div>
+                    <h3 style="font-size: 16px; font-weight: 800; color: #fca5a5; margin-bottom: 4px;">
+                      Membership Deactivated — Renewal Required for ${fy.label}
+                    </h3>
+                    <p style="font-size: 13px; color: #fecaca; margin: 0; line-height: 1.5; max-width: 680px;">
+                      As on 1st April of every year, all CREA(I) memberships are automatically set to deactivated pending annual renewal.
+                      Please pay your <strong>${fy.label} Annual Membership</strong> below. Once payment is recorded, your verified standing and accredited rates will automatically be reactivated!
+                    </p>
+                  </div>
+                </div>
+                ${memHead ? `
+                  <button onclick="app.openPaymentModal('${memHead.id}')" class="btn btn-primary" style="background: #ef4444; border-color: #dc2626; padding: 10px 20px; font-size: 13px; font-weight: 800; box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);">
+                    💳 Pay Dues & Reactivate Now
+                  </button>
+                ` : `
+                  <span class="badge" style="background: rgba(239, 68, 68, 0.3); color: #fca5a5; padding: 8px 12px;">
+                    Membership Head Pending Admin Activation
+                  </span>
+                `}
+              </div>
+            </div>
+          ` : ''}
 
           <!-- Section Title -->
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -853,6 +1033,14 @@
                 <div>
                   <label class="form-label">Email Address (for Invoice) *</label>
                   <input type="email" id="guest-email" value="${this.guestInfo.email}" oninput="app.guestInfo.email = this.value" placeholder="e.g. sid@urbanestates.in" class="form-input">
+                </div>
+                <div>
+                  <label class="form-label">GSTIN (Optional / For Tax Credit)</label>
+                  <input type="text" id="guest-gstin" value="${this.guestInfo.gstin || ''}" oninput="app.guestInfo.gstin = this.value.toUpperCase()" placeholder="e.g. 29ABCDE1234F1Z5" class="form-input" style="text-transform: uppercase;">
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <label class="form-label">Firm & Billing Address (for Tax Invoice)</label>
+                  <input type="text" id="guest-address" value="${this.guestInfo.address || ''}" oninput="app.guestInfo.address = this.value" placeholder="e.g. Urban Estates, 4th Block, Koramangala, Bangalore, Karnataka - 560034" class="form-input">
                 </div>
               </div>
             </div>
@@ -1059,6 +1247,32 @@
             </div>
           </div>
 
+          <!-- 1st April Auto-Deactivation & Annual Renewal Reminder for Admin -->
+          ${!this.data.heads.some(h => (h.code === 'MEM' || h.type === 'membership') && h.status === 'active') ? `
+            <div class="glass-card" style="border: 2px solid #f59e0b; background: linear-gradient(135deg, rgba(245, 158, 11, 0.16) 0%, rgba(120, 53, 15, 0.1) 100%); margin-bottom: 24px; padding: 20px 24px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+                <div style="display: flex; gap: 14px; align-items: center;">
+                  <span style="font-size: 34px;">🔔</span>
+                  <div>
+                    <h3 style="font-size: 16px; font-weight: 800; color: #fde68a; margin-bottom: 4px;">
+                      Annual Notice: Create & Activate Membership Renewal Head for ${this.getFinancialYear().label}
+                    </h3>
+                    <p style="font-size: 13px; color: #fef3c7; margin: 0; line-height: 1.5; max-width: 720px;">
+                      As on 1st April of every year, all CREA(I) memberships are automatically set to deactivated pending new financial year dues.
+                      Currently, no active membership payment head is open for <strong>${this.getFinancialYear().label}</strong>.
+                      Activate or create the <strong>${this.getFinancialYear().label} Membership</strong> head so members can pay online and automatically reactivate their verified membership standing.
+                    </p>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <button onclick="app.triggerYearlyRenewal()" class="btn btn-primary" style="background: #f59e0b; border-color: #d97706; color: #000; font-weight: 800; box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);">
+                    🔄 Activate ${this.getFinancialYear().label} Renewal Head Now
+                  </button>
+                </div>
+              </div>
+            </div>
+          ` : ''}
+
           <!-- 4 KPI Stat Cards -->
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; margin-bottom: 28px;">
             <div class="glass-card" style="border-top: 3px solid #38bdf8;">
@@ -1101,7 +1315,7 @@
                   </span>
                 </h3>
                 <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 3px;">
-                  Modify program names, extend registration cutoff dates, increase/decrease tiered prices, and toggle active/deactivate status.
+                  Modify program names, extend registration cutoff dates, increase/decrease tiered prices, scan gate entry, and verify gift kits.
                 </p>
               </div>
               <button onclick="app.openNewHeadModal()" class="btn btn-primary btn-sm">
@@ -1113,13 +1327,13 @@
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th style="min-width: 250px;">Program / Training / Membership</th>
+                    <th style="min-width: 240px;">Program / Training / Membership</th>
                     <th>Type</th>
                     <th>Status</th>
                     <th style="min-width: 210px;">Configured Prices (excl. GST)</th>
-                    <th>Registrations</th>
+                    <th style="min-width: 150px;">Registrations & Attendance</th>
                     <th>Total Gross (incl. 18%)</th>
-                    <th style="min-width: 190px; text-align: center;">Actions</th>
+                    <th style="min-width: 280px; text-align: center;">Kiosk & Management Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1127,11 +1341,13 @@
                     const hPays = payments.filter(p => p.headId === h.id || p.headCode === h.code);
                     const mems = hPays.filter(p => p.payerType === 'member');
                     const guests = hPays.filter(p => p.payerType === 'non_member');
+                    const attendedCount = hPays.filter(p => p.attended).length;
+                    const giftCount = hPays.filter(p => p.giftCollected).length;
                     const gross = hPays.reduce((acc, p) => acc + p.totalAmount, 0);
                     const isDeactivated = h.status === 'deactivated' || h.status === 'inactive';
                     const isExpired = h.activeUntil && new Date(h.activeUntil) < new Date();
 
-                    const pNew = h.prices?.new_member != null ? `₹${Number(h.prices.new_member).toLocaleString('en-IN')}` : '-';
+                    const pAssoc = (h.prices?.associate_member ?? h.prices?.new_member) != null ? `₹${Number(h.prices.associate_member ?? h.prices.new_member).toLocaleString('en-IN')}` : '-';
                     const pMem = h.prices?.member != null ? `₹${Number(h.prices.member).toLocaleString('en-IN')}` : '-';
                     const pBrd = h.prices?.board_member != null ? `₹${Number(h.prices.board_member).toLocaleString('en-IN')}` : '-';
                     const pGst = h.prices?.non_member != null ? `₹${Number(h.prices.non_member).toLocaleString('en-IN')}` : '<span style="color: var(--text-dim);">Restricted</span>';
@@ -1163,7 +1379,7 @@
                           `}
                         </td>
                         <td style="font-size: 11.5px; line-height: 1.5;">
-                          <div><span style="color: var(--text-dim);">New Mem:</span> <strong style="color: #fbbf24;">${pNew}</strong></div>
+                          <div><span style="color: var(--text-dim);">Assoc Mem:</span> <strong style="color: #fbbf24;">${pAssoc}</strong></div>
                           <div><span style="color: var(--text-dim);">Reg Mem:</span> <strong style="color: #38bdf8;">${pMem}</strong></div>
                           <div><span style="color: var(--text-dim);">Board:</span> <strong style="color: #c084fc;">${pBrd}</strong></div>
                           <div><span style="color: var(--text-dim);">Guest:</span> <strong>${pGst}</strong></div>
@@ -1171,22 +1387,38 @@
                         <td>
                           <strong>${hPays.length}</strong>
                           <div style="font-size: 11px; color: var(--text-muted);">${mems.length} Mems / ${guests.length} Guests</div>
+                          ${h.type !== 'membership' ? `
+                            <div style="font-size: 11px; color: #38bdf8; margin-top: 4px;">
+                              Gate: <strong style="color: #34d399;">${attendedCount}/${hPays.length}</strong> • Gifts: <strong style="color: #fbbf24;">${giftCount}/${hPays.length}</strong>
+                            </div>
+                          ` : ''}
                         </td>
                         <td style="color: #34d399; font-weight: 700; font-size: 13.5px;">₹${gross.toLocaleString('en-IN')}</td>
                         <td style="text-align: center;">
-                          <div style="display: inline-flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap;">
-                            <button onclick="app.openEditHeadModal('${h.id}')" class="btn btn-outline btn-sm" style="padding: 5px 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;" title="Modify title, extend dates, increase/decrease prices">
+                          <div style="display: flex; gap: 5px; align-items: center; justify-content: center; flex-wrap: wrap;">
+                            <button onclick="app.openEditHeadModal('${h.id}')" class="btn btn-outline btn-sm" style="padding: 4px 8px; font-size: 11.5px;" title="Modify title, extend dates, increase/decrease prices">
                               ✏️ Modify
                             </button>
                             ${isDeactivated ? `
-                              <button onclick="app.toggleHeadStatus('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 5px 10px; font-size: 12px; color: #34d399; border-color: rgba(16, 185, 129, 0.4); display: inline-flex; align-items: center; gap: 4px;" title="Reactivate this training or membership">
+                              <button onclick="app.toggleHeadStatus('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #34d399; border-color: rgba(16, 185, 129, 0.4);" title="Reactivate this training or membership">
                                 ▶ Activate
                               </button>
                             ` : `
-                              <button onclick="app.toggleHeadStatus('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 5px 10px; font-size: 12px; color: #f87171; border-color: rgba(239, 68, 68, 0.4); display: inline-flex; align-items: center; gap: 4px;" title="Deactivate this training or membership (pauses new registrations)">
+                              <button onclick="app.toggleHeadStatus('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #f87171; border-color: rgba(239, 68, 68, 0.4);" title="Deactivate this training or membership (pauses new registrations)">
                                 ⏸ Deactivate
                               </button>
                             `}
+                            ${h.type !== 'membership' ? `
+                              <button onclick="app.openScannerModal('${h.id}', 'entry')" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11.5px; background: #0284c7; border-color: #0369a1;" title="Open live camera kiosk to scan attendance QR">
+                                📷 Attendance
+                              </button>
+                              <button onclick="app.openScannerModal('${h.id}', 'gift')" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11.5px; background: #d97706; border-color: #b45309;" title="Open live camera kiosk to verify gift collection QR">
+                                🎁 Gift Kiosk
+                              </button>
+                              <button onclick="app.openDelegateTracker('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; border-color: rgba(56, 189, 248, 0.35); color: #38bdf8;" title="View delegates roster, mark check-ins and export list">
+                                📊 Roster (${hPays.length})
+                              </button>
+                            ` : ''}
                           </div>
                         </td>
                       </tr>
@@ -1511,7 +1743,7 @@ ${head.writeup || 'No detailed write-up provided.'}
           return;
         }
 
-        let payerName, payerMobile, payerEmail, payerCategory, payerType, payerId;
+        let payerName, payerMobile, payerEmail, payerCategory, payerType, payerId, payerGstin, payerAddress;
 
         if (mode === "member") {
           if (!this.loggedInMember) {
@@ -1524,11 +1756,15 @@ ${head.writeup || 'No detailed write-up provided.'}
           payerCategory = this.loggedInMember.category;
           payerType = "member";
           payerId = this.loggedInMember.id;
+          payerGstin = this.loggedInMember.gstin || "";
+          payerAddress = this.loggedInMember.address || "";
         } else {
           // Guest Mode
           payerName = this.guestInfo.name.trim();
           payerMobile = this.guestInfo.mobile.trim();
           payerEmail = this.guestInfo.email.trim();
+          payerGstin = (this.guestInfo.gstin || "").trim();
+          payerAddress = (this.guestInfo.address || "").trim();
           payerCategory = "non_member";
           payerType = "non_member";
           payerId = null;
@@ -1558,7 +1794,7 @@ ${head.writeup || 'No detailed write-up provided.'}
               <div class="modal-header">
                 <div>
                   <h3 style="font-size: 18px; font-weight: 700;">Confirm Registration & Payment</h3>
-                  <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">CREA(I) Simulated Direct Checkout</p>
+                  <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">CREA(I) Direct Digital Checkout</p>
                 </div>
                 <button class="modal-close" onclick="app.closeModal()">&times;</button>
               </div>
@@ -1573,7 +1809,19 @@ ${head.writeup || 'No detailed write-up provided.'}
                   <span style="color: var(--text-muted);">Contact:</span>
                   <span>+91 ${payerMobile} • ${payerEmail}</span>
                 </div>
-                <div style="display: flex; justify-content: space-between;">
+                ${payerGstin ? `
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--text-muted);">Payer GSTIN:</span>
+                    <strong style="color: #38bdf8;">${payerGstin}</strong>
+                  </div>
+                ` : ''}
+                ${payerAddress ? `
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--text-muted);">Billing Address:</span>
+                    <span style="color: #cbd5e1; text-align: right; max-width: 320px; font-size: 12px;">${payerAddress}</span>
+                  </div>
+                ` : ''}
+                <div style="display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.08);">
                   <span style="color: var(--text-muted);">Program:</span>
                   <span style="color: #38bdf8; font-weight: 600;">${head.title} (${head.code})</span>
                 </div>
@@ -1604,7 +1852,7 @@ ${head.writeup || 'No detailed write-up provided.'}
 
               <div style="display: flex; gap: 10px;">
                 <button onclick="app.closeModal()" class="btn btn-secondary" style="flex: 1;">Cancel</button>
-                <button onclick="app.executePayment('${head.id}', '${payerType}', '${payerCategory}', '${payerId}', '${payerName}', '${payerMobile}', '${payerEmail}')" class="btn btn-success" style="flex: 2;">
+                <button onclick="app.executePayment('${head.id}', '${payerType}', '${payerCategory}', '${payerId}', '${payerName}', '${payerMobile}', '${payerEmail}', '${app.escapeHtml(payerGstin)}', '${app.escapeHtml(payerAddress)}')" class="btn btn-success" style="flex: 2;">
                   ✓ Confirm & Complete Payment (₹${totalAmount.toLocaleString('en-IN')})
                 </button>
               </div>
@@ -1613,7 +1861,7 @@ ${head.writeup || 'No detailed write-up provided.'}
         `;
       },
 
-      async executePayment(headId, payerType, payerCategory, payerId, payerName, payerMobile, payerEmail) {
+      async executePayment(headId, payerType, payerCategory, payerId, payerName, payerMobile, payerEmail, payerGstin = "", payerAddress = "") {
         const head = this.data.heads.find(h => h.id === headId);
         if (!head) return;
 
@@ -1622,12 +1870,19 @@ ${head.writeup || 'No detailed write-up provided.'}
           return;
         }
 
+        const base = Number(head.prices[payerCategory]);
+        const cgst = Math.round(base * 0.09 * 100) / 100;
+        const sgst = Math.round(base * 0.09 * 100) / 100;
+        const totalGst = Math.round((cgst + sgst) * 100) / 100;
+        const totalAmount = Math.round((base + totalGst) * 100) / 100;
+        const fy = this.getFinancialYear();
+
         // Try calling server API
         try {
           const res = await fetch("/api/payment", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ headId, payerType, payerCategory, payerId, payerName, payerMobile, payerEmail })
+            body: JSON.stringify({ headId, payerType, payerCategory, payerId, payerName, payerMobile, payerEmail, payerGstin, payerAddress })
           });
           if (res.ok) {
             const result = await res.json();
@@ -1635,27 +1890,17 @@ ${head.writeup || 'No detailed write-up provided.'}
             const refreshed = await fetch("/api/data");
             const j = await refreshed.json();
             this.data = j.data;
+            this.normalizeData();
             this.showPaymentSuccess(result.payment);
-            return;
-          } else {
-            const errJson = await res.json().catch(() => ({}));
-            alert(errJson.error || "Payment failed");
             return;
           }
         } catch(e) {}
 
         // Fallback offline execution
-        const base = Number(head.prices[payerCategory]);
-        const cgst = Math.round(base * 0.09 * 100) / 100;
-        const sgst = Math.round(base * 0.09 * 100) / 100;
-        const totalGst = Math.round((cgst + sgst) * 100) / 100;
-        const totalAmount = Math.round((base + totalGst) * 100) / 100;
-
         const nextSerial = (this.data.invoiceCounter || 0) + 1;
         this.data.invoiceCounter = nextSerial;
         const serialStr = String(nextSerial).padStart(4, "0");
-        const fy = "2627";
-        const invoiceNo = `CREA/${fy}/${head.code.toUpperCase()}/${serialStr}`;
+        const invoiceNo = `CREA/${fy.code}/${head.code.toUpperCase()}/${serialStr}`;
 
         const newPayment = {
           id: `pay-${Date.now()}`,
@@ -1671,13 +1916,19 @@ ${head.writeup || 'No detailed write-up provided.'}
           payerName,
           payerMobile,
           payerEmail,
+          payerGstin: payerGstin || "",
+          payerAddress: payerAddress || "",
           baseAmount: base,
           cgst,
           sgst,
           totalGst,
           totalAmount,
           status: "success",
-          method: "Simulated Gateway (Instant Checkout)"
+          method: "Simulated Gateway (Instant Checkout)",
+          attended: false,
+          attendedAt: null,
+          giftCollected: false,
+          giftCollectedAt: null
         };
 
         this.data.payments.unshift(newPayment);
@@ -1691,6 +1942,19 @@ ${head.writeup || 'No detailed write-up provided.'}
           amount: totalAmount,
           status: "Dispatched (Simulated SMTP)"
         });
+
+        // If membership payment, auto-activate the member offline
+        const isMem = head.code === "MEM" || head.type === "membership" || (head.title && head.title.toLowerCase().includes("membership"));
+        if (isMem && (payerId || payerMobile)) {
+          const mem = this.data.members.find(m => m.id === payerId || m.mobile === payerMobile);
+          if (mem) {
+            mem.status = "active";
+            mem.lastPaidFY = fy.code;
+            mem.paymentMeans = "Online Gateway";
+            mem.activationNote = `Paid Online (Invoice ${invoiceNo})`;
+          }
+          this.normalizeData();
+        }
 
         this.saveToStorage();
         this.showPaymentSuccess(newPayment);
@@ -1727,7 +1991,7 @@ ${head.writeup || 'No detailed write-up provided.'}
 
               <div style="display: flex; gap: 12px; justify-content: center;">
                 <button onclick="app.viewInvoice('${payment.invoiceNo}')" class="btn btn-primary">
-                  🖨️ Download & Print Tax Invoice
+                  🖨️ Download & Print Tax Invoice (with 2 QR Codes)
                 </button>
                 <button onclick="app.closeModal(); app.render();" class="btn btn-secondary">
                   Back to Portal
@@ -1738,15 +2002,21 @@ ${head.writeup || 'No detailed write-up provided.'}
         `;
       },
 
-      // INVOICE VIEWER & PRINTABLE TAX INVOICE
+      // INVOICE VIEWER & PRINTABLE TAX INVOICE WITH 2 QR CODES (ATTENDANCE & GIFT)
       viewInvoice(invoiceNo) {
         const payment = this.data.payments.find(p => p.invoiceNo === invoiceNo);
         if (!payment) return;
         const head = this.data.heads.find(h => h.id === payment.headId || h.code === payment.headCode);
+        const member = this.data.members.find(m => m.id === payment.payerId || m.mobile === payment.payerMobile);
+
+        const entryQRPayload = `CREA|ENTRY|${payment.invoiceNo}|${payment.headCode}|${payment.payerMobile}`;
+        const giftQRPayload = `CREA|GIFT|${payment.invoiceNo}|${payment.headCode}|${payment.payerMobile}`;
+        const entryQR = this.generateQR(entryQRPayload, 3);
+        const giftQR = this.generateQR(giftQRPayload, 3);
 
         document.getElementById("modal-root").innerHTML = `
           <div class="modal-overlay" onclick="app.closeModal(event)">
-            <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 800px;">
+            <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 840px;">
               <div class="modal-header no-print">
                 <div style="display: flex; align-items: center; gap: 10px;">
                   <span class="badge badge-paid">Official Tax Invoice</span>
@@ -1781,20 +2051,80 @@ ${head.writeup || 'No detailed write-up provided.'}
                   </div>
                 </div>
 
-                <!-- Bill To -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 20px; font-size: 12px;">
+                <!-- Bill To & Payer GST Details -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 18px; font-size: 12px;">
                   <div>
                     <div style="font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 4px;">Billed To / Participant:</div>
                     <div style="font-size: 14px; font-weight: 800; color: #0f172a;">${payment.payerName}</div>
                     <div>Phone: +91 ${payment.payerMobile}</div>
                     <div>Email: ${payment.payerEmail}</div>
                     <div>Category: <strong>${payment.payerCategory.replace('_', ' ').toUpperCase()}</strong></div>
+                    <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #cbd5e1;">
+                      <strong>Payer GSTIN:</strong> <span style="color: #0f172a; font-weight: 700;">${payment.payerGstin || (member && member.gstin) || 'URP (Unregistered Person)'}</span>
+                    </div>
+                    <div style="font-size: 11px; color: #475569; margin-top: 3px; line-height: 1.4;">
+                      <strong>Billing Address:</strong> ${payment.payerAddress || (member && member.address) || 'CREA Associate Member, Bangalore, Karnataka'}
+                    </div>
                   </div>
                   <div>
                     <div style="font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 4px;">Program Details:</div>
                     <div style="font-size: 13px; font-weight: 700; color: #0f172a;">${payment.headTitle}</div>
                     <div>Schedule: ${head ? head.eventDate : '2026-2027'} (${head ? head.eventTime : 'Full Year'})</div>
                     <div>Venue: ${head ? head.venue : 'CREA(I) Bangalore'}</div>
+                    <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #cbd5e1; font-size: 11px;">
+                      Payment Mode: <strong style="color: #059669;">${payment.method || 'Online Verified Transaction'}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 2 QR CODES: 1 FOR ATTENDANCE ENTRY, 1 FOR WELCOME GIFT -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: #f8fafc; border: 1.5px dashed #94a3b8; border-radius: 8px; padding: 14px; margin-bottom: 20px;">
+                  <!-- QR 1: Attendance Pass -->
+                  <div style="text-align: center; border-right: 1px solid #e2e8f0; padding-right: 10px;">
+                    <div style="font-size: 11px; font-weight: 800; color: #1e3a8a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
+                      📷 1. Gate Entry & Attendance Pass
+                    </div>
+                    <div style="display: inline-block; padding: 6px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                      ${entryQR}
+                    </div>
+                    <div style="font-size: 10.5px; color: #475569; margin-top: 4px;">
+                      Scan at kiosk entrance for verified hall entry
+                    </div>
+                    <div style="margin-top: 4px;">
+                      ${payment.attended ? `
+                        <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #dcfce7; color: #15803d; border: 1px solid #86efac; border-radius: 4px; padding: 2px 6px;">
+                          ✓ Attended (${new Date(payment.attendedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })})
+                        </span>
+                      ` : `
+                        <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 4px; padding: 2px 6px;">
+                          ● Valid for Gate Entry
+                        </span>
+                      `}
+                    </div>
+                  </div>
+
+                  <!-- QR 2: Delegate Gift Kit -->
+                  <div style="text-align: center; padding-left: 10px;">
+                    <div style="font-size: 11px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
+                      🎁 2. Welcome Gift / Delegate Kit
+                    </div>
+                    <div style="display: inline-block; padding: 6px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                      ${giftQR}
+                    </div>
+                    <div style="font-size: 10.5px; color: #475569; margin-top: 4px;">
+                      Scan at kit counter for complimentary gift
+                    </div>
+                    <div style="margin-top: 4px;">
+                      ${payment.giftCollected ? `
+                        <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #fef3c7; color: #b45309; border: 1px solid #fde68a; border-radius: 4px; padding: 2px 6px;">
+                          ✓ Gift Claimed (${new Date(payment.giftCollectedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })})
+                        </span>
+                      ` : `
+                        <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #fef3c7; color: #b45309; border: 1px solid #fde68a; border-radius: 4px; padding: 2px 6px;">
+                          ● 1 Delegate Kit Redeemable
+                        </span>
+                      `}
+                    </div>
                   </div>
                 </div>
 
@@ -1924,8 +2254,8 @@ ${head.writeup || 'No detailed write-up provided.'}
                   </div>
                   <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
                     <div>
-                      <label class="form-label" style="font-size: 11px;">New Member (₹)</label>
-                      <input type="number" id="price-new_member" placeholder="1500" class="form-input">
+                      <label class="form-label" style="font-size: 11px;">Associate Member (₹)</label>
+                      <input type="number" id="price-associate_member" placeholder="1000" class="form-input">
                     </div>
                     <div>
                       <label class="form-label" style="font-size: 11px;">Member (₹)</label>
@@ -2016,8 +2346,10 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
         const venue = document.getElementById("new-head-venue").value.trim();
         const writeup = document.getElementById("new-head-writeup").value.trim();
 
+        const assocPriceVal = document.getElementById("price-associate_member")?.value || document.getElementById("price-new_member")?.value;
         const prices = {
-          new_member: document.getElementById("price-new_member").value ? Number(document.getElementById("price-new_member").value) : null,
+          associate_member: assocPriceVal ? Number(assocPriceVal) : null,
+          new_member: assocPriceVal ? Number(assocPriceVal) : null,
           member: document.getElementById("price-member").value ? Number(document.getElementById("price-member").value) : null,
           board_member: document.getElementById("price-board_member").value ? Number(document.getElementById("price-board_member").value) : null,
           non_member: document.getElementById("price-non_member").value ? Number(document.getElementById("price-non_member").value) : null
@@ -2079,7 +2411,7 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
         }
 
         const isDeactivated = head.status === "deactivated" || head.status === "inactive";
-        const newMemPrice = head.prices?.new_member ?? "";
+        const newMemPrice = head.prices?.associate_member ?? head.prices?.new_member ?? "";
         const memPrice = head.prices?.member ?? "";
         const boardPrice = head.prices?.board_member ?? "";
         const nonMemPrice = head.prices?.non_member ?? "";
@@ -2207,17 +2539,17 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
                   </div>
 
                   <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
-                    <!-- New Member -->
+                    <!-- Associate Member -->
                     <div style="background: #0f172a; border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 10px;">
                       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label class="form-label" style="font-size: 11px; margin-bottom: 0; color: #fbbf24;">New Member</label>
+                        <label class="form-label" style="font-size: 11px; margin-bottom: 0; color: #fbbf24;">Associate Member</label>
                         <div style="display: flex; gap: 2px;">
-                          <button type="button" onclick="app.adjustEditPrice('new_member', -100)" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" title="Decrease ₹100">-</button>
-                          <button type="button" onclick="app.adjustEditPrice('new_member', 100)" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" title="Increase ₹100">+</button>
+                          <button type="button" onclick="app.adjustEditPrice('associate_member', -100)" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" title="Decrease ₹100">-</button>
+                          <button type="button" onclick="app.adjustEditPrice('associate_member', 100)" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" title="Increase ₹100">+</button>
                         </div>
                       </div>
-                      <input type="number" id="edit-price-new_member" value="${newMemPrice}" placeholder="1500" oninput="app.updateEditPriceGST('new_member')" class="form-input" style="padding: 6px 8px; font-size: 13px; font-weight: 700;">
-                      <div id="preview-new_member" style="font-size: 10.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.4;"></div>
+                      <input type="number" id="edit-price-associate_member" value="${newMemPrice}" placeholder="1000" oninput="app.updateEditPriceGST('associate_member')" class="form-input" style="padding: 6px 8px; font-size: 13px; font-weight: 700;">
+                      <div id="preview-associate_member" style="font-size: 10.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.4;"></div>
                     </div>
 
                     <!-- Regular Member -->
@@ -2298,7 +2630,7 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
         `;
 
         // Run live GST previews for all initial tier values
-        ['new_member', 'member', 'board_member', 'non_member'].forEach(tier => {
+        ['associate_member', 'new_member', 'member', 'board_member', 'non_member'].forEach(tier => {
           app.updateEditPriceGST(tier);
         });
       },
@@ -2357,7 +2689,7 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
       },
 
       adjustAllEditPrices(delta) {
-        ['new_member', 'member', 'board_member', 'non_member'].forEach(tier => {
+        ['associate_member', 'new_member', 'member', 'board_member', 'non_member'].forEach(tier => {
           const input = document.getElementById(`edit-price-${tier}`);
           if (input && input.value !== "") {
             let current = Number(input.value || 0);
@@ -2451,8 +2783,10 @@ Participants receive official CREA(I) accreditation credits, certified study mat
           return Number(val);
         };
 
+        const assocVal = parsePrice("edit-price-associate_member") ?? parsePrice("edit-price-new_member");
         const prices = {
-          new_member: parsePrice("edit-price-new_member"),
+          associate_member: assocVal,
+          new_member: assocVal,
           member: parsePrice("edit-price-member"),
           board_member: parsePrice("edit-price-board_member"),
           non_member: parsePrice("edit-price-non_member")
@@ -2526,54 +2860,76 @@ Participants receive official CREA(I) accreditation credits, certified study mat
 
       // MEMBERS MANAGEMENT MODAL
       openMembersModal() {
+        const primaryMembers = this.data.members.filter(m => m.category !== 'associate_member');
+
         document.getElementById("modal-root").innerHTML = `
           <div class="modal-overlay" onclick="app.closeModal(event)">
-            <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 800px;">
+            <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 960px;">
               <div class="modal-header">
                 <div>
                   <h3 style="font-size: 18px; font-weight: 700;">CREA Member Directory & Management</h3>
-                  <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Add single members or bulk-import via CSV paste</p>
+                  <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Manage memberships, associate linkages, GSTIN/billing details, and activation statuses</p>
                 </div>
                 <button class="modal-close" onclick="app.closeModal()">&times;</button>
               </div>
 
-              <!-- Add Member / Bulk Form -->
+              <!-- Add Member Form -->
               <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 10px; padding: 14px; margin-bottom: 20px;">
-                <div style="font-size: 12.5px; font-weight: 700; color: #38bdf8; margin-bottom: 8px;">+ Quick Add Individual Member:</div>
-                <div style="display: grid; grid-template-columns: 2fr 1.5fr 2fr 1.5fr auto; gap: 8px; align-items: flex-end;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                  <div style="font-size: 13px; font-weight: 700; color: #38bdf8;">+ Quick Add Member to CREA Directory:</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">Associate members get discounted fees but inherit main member's active standing</div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1.5fr 1.2fr 1.5fr 1.2fr 1.6fr; gap: 8px; margin-bottom: 8px;">
                   <div>
-                    <label class="form-label" style="font-size: 11px;">Name</label>
-                    <input type="text" id="add-mem-name" placeholder="Vikram" class="form-input" style="padding: 7px 10px; font-size: 12px;">
+                    <label class="form-label" style="font-size: 11px;">Name *</label>
+                    <input type="text" id="add-mem-name" placeholder="Vikram Singhania" class="form-input" style="padding: 7px 10px; font-size: 12px;">
                   </div>
                   <div>
-                    <label class="form-label" style="font-size: 11px;">Mobile</label>
+                    <label class="form-label" style="font-size: 11px;">Mobile *</label>
                     <input type="text" id="add-mem-mobile" placeholder="9845012345" class="form-input" style="padding: 7px 10px; font-size: 12px;">
                   </div>
                   <div>
-                    <label class="form-label" style="font-size: 11px;">Email</label>
+                    <label class="form-label" style="font-size: 11px;">Email *</label>
                     <input type="email" id="add-mem-email" placeholder="vikram@realty.in" class="form-input" style="padding: 7px 10px; font-size: 12px;">
                   </div>
                   <div>
                     <label class="form-label" style="font-size: 11px;">Category</label>
-                    <select id="add-mem-cat" class="form-select" style="padding: 7px 10px; font-size: 12px;">
-                      <option value="member">Member</option>
-                      <option value="new_member">New Member</option>
+                    <select id="add-mem-cat" class="form-select" style="padding: 7px 10px; font-size: 12px;" onchange="document.getElementById('add-mem-parent-wrap').style.display = this.value === 'associate_member' ? 'block' : 'none'">
+                      <option value="member">Regular Member</option>
+                      <option value="associate_member">Associate Member</option>
                       <option value="board_member">Board Member</option>
                     </select>
                   </div>
-                  <button onclick="app.addSingleMember()" class="btn btn-primary btn-sm" style="height: 34px;">+ Add</button>
+                  <div id="add-mem-parent-wrap" style="display: none;">
+                    <label class="form-label" style="font-size: 11px; color: #f59e0b;">Linked Main Member *</label>
+                    <select id="add-mem-parent" class="form-select" style="padding: 7px 10px; font-size: 12px; border-color: rgba(245, 158, 11, 0.4);">
+                      <option value="">-- Select Main Member --</option>
+                      ${primaryMembers.map(pm => `<option value="${pm.id}">${pm.name} (${pm.mobile})</option>`).join('')}
+                    </select>
+                  </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1.5fr 3fr auto; gap: 8px; align-items: flex-end;">
+                  <div>
+                    <label class="form-label" style="font-size: 11px;">Member GSTIN (Optional)</label>
+                    <input type="text" id="add-mem-gstin" placeholder="29AAAAA0000A1Z5" maxlength="15" class="form-input" style="padding: 7px 10px; font-size: 12px; text-transform: uppercase;">
+                  </div>
+                  <div>
+                    <label class="form-label" style="font-size: 11px;">Billing Address (For Tax Invoices)</label>
+                    <input type="text" id="add-mem-address" placeholder="Suite 401, Prestige Meridian, MG Road, Bangalore 560001" class="form-input" style="padding: 7px 10px; font-size: 12px;">
+                  </div>
+                  <button onclick="app.addSingleMember()" class="btn btn-primary btn-sm" style="height: 34px; padding: 0 16px;">+ Add Member</button>
                 </div>
               </div>
 
               <!-- Members Table -->
-              <div style="max-height: 340px; overflow-y: auto;">
+              <div style="max-height: 380px; overflow-y: auto;">
                 <table class="data-table">
                   <thead>
                     <tr>
-                      <th>Name & Firm</th>
-                      <th>Mobile</th>
-                      <th>Email</th>
-                      <th>Category</th>
+                      <th>Member & Firm</th>
+                      <th>Mobile & GSTIN</th>
+                      <th>Category & Hierarchy</th>
+                      <th>Status & Standing</th>
                       <th>Action</th>
                     </tr>
                   </thead>
@@ -2582,13 +2938,47 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                       <tr>
                         <td>
                           <strong>${m.name}</strong>
-                          <div style="font-size: 11px; color: var(--text-dim);">${m.company || 'Broker'}</div>
+                          <div style="font-size: 11px; color: var(--text-dim);">${m.company || 'Brokerage'} • ${m.city || 'Bangalore'}</div>
+                          ${m.address ? `<div style="font-size: 10px; color: var(--text-muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${m.address}">${m.address}</div>` : ''}
                         </td>
-                        <td>${m.mobile}</td>
-                        <td style="font-size: 12px; color: #38bdf8;">${m.email}</td>
-                        <td><span class="badge badge-${m.category}">${m.category.replace('_', ' ')}</span></td>
                         <td>
-                          <button onclick="app.deleteMember('${m.id}')" class="btn btn-secondary btn-sm" style="color: #f87171; padding: 2px 6px;">Delete</button>
+                          <div>${m.mobile}</div>
+                          ${m.gstin ? `<div style="font-size: 10.5px; color: #38bdf8; font-family: monospace;">GST: ${m.gstin}</div>` : '<div style="font-size: 10.5px; color: var(--text-dim);">No GSTIN</div>'}
+                          <div style="font-size: 11px; color: var(--text-muted);">${m.email}</div>
+                        </td>
+                        <td>
+                          <div><span class="badge badge-${m.category}">${m.category.replace('_', ' ')}</span></div>
+                          ${m.category === 'associate_member' ? `
+                            <div style="font-size: 11px; color: #f59e0b; margin-top: 3px;">
+                              🔗 Linked: <strong>${m.parentMemberName || 'Main Member'}</strong>
+                            </div>
+                          ` : ''}
+                        </td>
+                        <td>
+                          ${m.status === 'active' ? `
+                            <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid #059669; font-size: 11px;">● Active</span>
+                          ` : `
+                            <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid #dc2626; font-size: 11px;">⏸ Deactivated</span>
+                          `}
+                          ${m.deactivationReason ? `
+                            <div style="font-size: 10px; color: #f87171; margin-top: 2px; max-width: 160px; line-height: 1.2;">
+                              ${m.deactivationReason}
+                            </div>
+                          ` : (m.activationNote ? `
+                            <div style="font-size: 10px; color: #6ee7b7; margin-top: 2px; max-width: 160px; line-height: 1.2;">
+                              ${m.activationNote}
+                            </div>
+                          ` : '')}
+                        </td>
+                        <td>
+                          <div style="display: flex; gap: 4px; align-items: center;">
+                            ${m.status === 'active' ? `
+                              <button onclick="app.toggleMemberStatus('${m.id}', 'deactivated')" class="btn btn-secondary btn-sm" style="color: #f87171; padding: 3px 8px; font-size: 11px;" title="Deactivate Member">⏸ Deactivate</button>
+                            ` : `
+                              <button onclick="app.openManualActivationModal('${m.id}')" class="btn btn-primary btn-sm" style="padding: 3px 8px; font-size: 11px; background: #059669; border-color: #10b981;" title="Activate Member with Payment Record">✓ Activate</button>
+                            `}
+                            <button onclick="app.deleteMember('${m.id}')" class="btn btn-secondary btn-sm" style="color: var(--text-dim); padding: 3px 6px;" title="Remove Member">🗑️</button>
+                          </div>
                         </td>
                       </tr>
                     `).join('')}
@@ -2596,7 +2986,10 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                 </table>
               </div>
 
-              <div style="margin-top: 18px; text-align: right;">
+              <div style="margin-top: 18px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 11.5px; color: var(--text-muted);">
+                  Total Registered Members: <strong>${this.data.members.length}</strong> (Active: ${this.data.members.filter(m => m.status === 'active').length})
+                </div>
                 <button onclick="app.closeModal()" class="btn btn-secondary btn-sm">Done</button>
               </div>
             </div>
@@ -2609,43 +3002,841 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         const mobile = document.getElementById("add-mem-mobile").value.trim();
         const email = document.getElementById("add-mem-email").value.trim();
         const category = document.getElementById("add-mem-cat").value;
+        const gstin = (document.getElementById("add-mem-gstin").value || "").trim().toUpperCase();
+        const address = (document.getElementById("add-mem-address").value || "").trim();
 
         if (!name || !mobile) {
           alert("Name and mobile are mandatory.");
           return;
         }
 
+        let parentMemberId = null;
+        let parentMemberName = null;
+        let parentMemberMobile = null;
+
+        if (category === "associate_member") {
+          const parentSelect = document.getElementById("add-mem-parent");
+          parentMemberId = parentSelect ? parentSelect.value : null;
+          if (!parentMemberId) {
+            alert("Please select a Linked Main Member for this Associate Member.");
+            return;
+          }
+          const parentObj = this.data.members.find(m => m.id === parentMemberId);
+          if (parentObj) {
+            parentMemberName = parentObj.name;
+            parentMemberMobile = parentObj.mobile;
+          }
+        }
+
+        const currentFY = this.getFinancialYear();
         const newMem = {
           id: `mem-${Date.now()}`,
           name,
           mobile,
           email,
           category,
+          parentMemberId,
+          parentMemberName,
+          parentMemberMobile,
+          gstin: gstin || null,
+          address: address || null,
           company: "Independent Realtor",
-          city: "Bangalore"
+          city: "Bangalore",
+          status: "active",
+          lastPaidFY: currentFY,
+          paymentMeans: "Admin Direct",
+          activationNote: "Added by Administrator",
+          joinedDate: new Date().toISOString().split("T")[0]
         };
 
         this.data.members.unshift(newMem);
+        this.normalizeData();
         this.saveToStorage();
-        this.openMembersModal(); // Refresh modal
+
+        try {
+          fetch("/api/members", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ member: newMem })
+          });
+        } catch(err) {}
+
+        this.openMembersModal();
+        this.render();
       },
 
       deleteMember(id) {
         if (!confirm("Are you sure you want to remove this member?")) return;
         this.data.members = this.data.members.filter(m => m.id !== id);
+        this.normalizeData();
         this.saveToStorage();
+        this.openMembersModal();
+        this.render();
+      },
+
+      async toggleMemberStatus(memberId, newStatus) {
+        const mem = this.data.members.find(m => m.id === memberId);
+        if (!mem) return;
+
+        mem.status = newStatus;
+        if (newStatus === 'deactivated') {
+          mem.deactivationReason = "Manually deactivated by Admin";
+        } else {
+          mem.deactivationReason = null;
+          mem.activationNote = "Admin Manual Activation";
+        }
+
+        try {
+          await fetch("/api/member/status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: memberId, status: newStatus })
+          });
+        } catch(err) {}
+
+        this.normalizeData();
+        this.saveToStorage();
+        this.openMembersModal();
+        this.render();
+      },
+
+      openManualActivationModal(memberId) {
+        const mem = this.data.members.find(m => m.id === memberId);
+        if (!mem) return;
+
+        const currentFY = this.getFinancialYear();
+        const memHead = this.data.heads.find(h => h.code === "MEM" || h.type === "membership");
+        const baseDues = memHead ? (memHead.prices[mem.category] || (mem.category === 'associate_member' ? 5000 : 10000)) : 10000;
+        const totalWithGst = Math.round(baseDues * 1.18);
+
+        let parentWarning = '';
+        if (mem.category === 'associate_member') {
+          const parent = this.data.members.find(p => p.id === mem.parentMemberId);
+          if (parent && parent.status === 'deactivated') {
+            parentWarning = `
+              <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px; color: #fca5a5;">
+                <strong>⚠️ Strict Dependency Rule:</strong> This Associate Member is linked to <strong>${parent.name}</strong> (${parent.mobile}), who is currently <strong>DEACTIVATED</strong>.
+                Even upon activating this associate, CREA rules specify an associate member remains deactivated until the Main Member settles their membership dues!
+              </div>
+            `;
+          }
+        }
+
+        document.getElementById("modal-root").innerHTML = `
+          <div class="modal-overlay" onclick="app.closeModal(event)">
+            <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 540px;">
+              <div class="modal-header">
+                <div>
+                  <h3 style="font-size: 17px; font-weight: 700; color: #34d399;">✓ Admin Membership Activation</h3>
+                  <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Record offline payment & activate membership access</p>
+                </div>
+                <button class="modal-close" onclick="app.closeModal()">&times;</button>
+              </div>
+
+              ${parentWarning}
+
+              <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 12.5px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                  <span style="color: var(--text-muted);">Member:</span>
+                  <strong>${mem.name} (${mem.mobile})</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                  <span style="color: var(--text-muted);">Category:</span>
+                  <span class="badge badge-${mem.category}">${mem.category.replace('_', ' ')}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: var(--text-muted);">Annual FY Dues:</span>
+                  <span style="color: #38bdf8; font-weight: 700;">₹${baseDues.toLocaleString('en-IN')} + 18% GST = ₹${totalWithGst.toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Payment Mode / Means *</label>
+                <select id="manual-pay-means" class="form-select">
+                  <option value="Bank NEFT / RTGS Transfer">Bank NEFT / RTGS Transfer</option>
+                  <option value="Cheque Deposit (Cleared)">Cheque Deposit (Cleared)</option>
+                  <option value="UPI / QR Code Transfer">UPI / QR Code Transfer</option>
+                  <option value="Cash Collection at CREA Office">Cash Collection at CREA Office</option>
+                  <option value="Executive / Board Waiver">Executive / Board Member Waiver</option>
+                  <option value="Other Verified Mode">Other Verified Mode</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Payment Reference / Description *</label>
+                <textarea id="manual-pay-note" class="form-textarea" rows="2" placeholder="e.g., UTR / Cheque #490210 HDFC Bank, cleared on 12-Apr-2026. Approved by Secretary."></textarea>
+                <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">Provide bank transaction ID, cheque number, or executive approval reference.</div>
+              </div>
+
+              <div class="form-group" style="background: #090f1d; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--card-border);">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12.5px; font-weight: 600;">
+                  <input type="checkbox" id="manual-create-inv" checked style="accent-color: #38bdf8; width: 16px; height: 16px;">
+                  Generate Official Tax Invoice for FY ${currentFY} (CREA/${currentFY}/MEM/...)
+                </label>
+                <div style="font-size: 11px; color: var(--text-muted); margin-left: 24px; margin-top: 2px;">
+                  Creates an itemized GST Tax Invoice with Gate Entry & Welcome Gift QR codes.
+                </div>
+              </div>
+
+              <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button onclick="app.openMembersModal()" class="btn btn-secondary btn-sm">Back</button>
+                <button onclick="app.submitManualActivation('${mem.id}')" class="btn btn-primary btn-sm" style="background: #059669; border-color: #10b981;">✓ Confirm & Activate Member</button>
+              </div>
+            </div>
+          </div>
+        `;
+      },
+
+      async submitManualActivation(memberId) {
+        const mem = this.data.members.find(m => m.id === memberId);
+        if (!mem) return;
+
+        const paymentMeans = document.getElementById("manual-pay-means").value;
+        const description = (document.getElementById("manual-pay-note").value || "").trim();
+        const createInvoice = document.getElementById("manual-create-inv").checked;
+
+        if (!description) {
+          alert("Please enter a payment description or transaction reference.");
+          return;
+        }
+
+        const currentFY = this.getFinancialYear();
+        const memHead = this.data.heads.find(h => h.code === "MEM" || h.type === "membership") || this.data.heads[0];
+
+        mem.status = "active";
+        mem.lastPaidFY = currentFY;
+        mem.paymentMeans = paymentMeans;
+        mem.activationNote = description;
+        mem.deactivationReason = null;
+
+        let generatedInvoiceNo = null;
+
+        if (createInvoice && memHead) {
+          const base = Number(memHead.prices[mem.category] || (mem.category === 'associate_member' ? 5000 : 10000));
+          const cgst = Math.round(base * 0.09 * 100) / 100;
+          const sgst = Math.round(base * 0.09 * 100) / 100;
+          const totalGst = Math.round((cgst + sgst) * 100) / 100;
+          const totalAmount = Math.round((base + totalGst) * 100) / 100;
+
+          const nextSerial = (this.data.invoiceCounter || 0) + 1;
+          this.data.invoiceCounter = nextSerial;
+          const serialStr = String(nextSerial).padStart(4, "0");
+          generatedInvoiceNo = `CREA/${currentFY}/${memHead.code.toUpperCase()}/${serialStr}`;
+
+          const paymentRecord = {
+            id: `pay-${Date.now()}`,
+            invoiceNo: generatedInvoiceNo,
+            serial: nextSerial,
+            date: new Date().toISOString(),
+            headId: memHead.id,
+            headCode: memHead.code,
+            headTitle: memHead.title,
+            payerType: "member",
+            payerCategory: mem.category,
+            payerId: mem.id,
+            payerName: mem.name,
+            payerMobile: mem.mobile,
+            payerEmail: mem.email,
+            payerGstin: mem.gstin || "",
+            payerAddress: mem.address || "",
+            attended: false,
+            giftCollected: false,
+            baseAmount: base,
+            cgst,
+            sgst,
+            totalGst,
+            totalAmount,
+            status: "success",
+            method: `Manual Admin (${paymentMeans}): ${description}`
+          };
+
+          this.data.payments.unshift(paymentRecord);
+        }
+
+        try {
+          await fetch("/api/member/activate-manual", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: memberId,
+              paymentMeans,
+              description,
+              createInvoice,
+              headId: memHead ? memHead.id : null
+            })
+          });
+        } catch (err) {}
+
+        this.normalizeData();
+        this.saveToStorage();
+        this.render();
+
+        alert(`✓ Member '${mem.name}' has been successfully ACTIVATED for FY ${currentFY}!\n${generatedInvoiceNo ? `Tax Invoice ${generatedInvoiceNo} created.` : ''}`);
         this.openMembersModal();
       },
 
-      // 1-CLICK YEARLY MEMBERSHIP RENEWAL
+      // CAMERA QR SCANNER MODAL (Gate Entry & Welcome Gift)
+      openScannerModal(headId, mode = 'attendance') {
+        const head = this.data.heads.find(h => h.id === headId);
+        if (!head) return;
+
+        const isAttendance = mode === 'attendance';
+        const modalTitle = isAttendance ? "📷 Gate Entry & Attendance Scanner" : "🎁 Delegate Kit & Welcome Gift Collection";
+        const accentColor = isAttendance ? "#38bdf8" : "#a855f7";
+        const instruction = isAttendance ? "Scan Attendee QR Code on downloaded Tax Invoice to mark gate entry" : "Scan Welcome Gift QR Code on Tax Invoice to record gift collection";
+
+        document.getElementById("modal-root").innerHTML = `
+          <div class="modal-overlay" onclick="app.closeScannerModal(event)">
+            <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 520px; border: 1px solid ${accentColor};">
+              <div class="modal-header">
+                <div>
+                  <h3 style="font-size: 17px; font-weight: 700; color: ${accentColor};">${modalTitle}</h3>
+                  <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">${head.title}</p>
+                </div>
+                <button class="modal-close" onclick="app.closeScannerModal()">&times;</button>
+              </div>
+
+              <!-- Camera Viewport -->
+              <div style="position: relative; max-width: 440px; margin: 0 auto; border-radius: 12px; overflow: hidden; background: #000; border: 2px solid ${accentColor}; box-shadow: 0 0 20px rgba(0,0,0,0.5);">
+                <video id="scanner-video" playsinline style="width: 100%; height: 260px; object-fit: cover; display: block;"></video>
+                <canvas id="scanner-canvas" style="display: none;"></canvas>
+                <div id="scanner-laser" style="position: absolute; top: 0; left: 0; right: 0; height: 3px; background: ${accentColor}; box-shadow: 0 0 12px ${accentColor}; animation: scanLaser 2s infinite ease-in-out;"></div>
+                <div id="scanner-reticle" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 180px; height: 180px; border: 2px dashed rgba(255,255,255,0.6); border-radius: 12px; pointer-events: none;"></div>
+              </div>
+
+              <!-- Status Box -->
+              <div id="scanner-status" style="margin-top: 14px; padding: 10px 14px; border-radius: 8px; font-size: 12.5px; text-align: center; background: #0d1527; border: 1px solid var(--card-border); color: var(--text-muted);">
+                ${instruction}
+              </div>
+
+              <!-- Scan Result Box -->
+              <div id="scanner-result" style="margin-top: 12px; display: none;"></div>
+
+              <!-- Manual Entry Fallback -->
+              <div style="margin-top: 16px; border-top: 1px solid var(--card-border); padding-top: 14px;">
+                <label class="form-label" style="font-size: 11.5px; color: var(--text-muted);">Manual Fallback (Enter Invoice No or Mobile):</label>
+                <div style="display: flex; gap: 8px;">
+                  <input type="text" id="manual-scan-input" class="form-input" placeholder="e.g., CREA/2627/${head.code}/0001 or 9845012345" style="flex: 1; font-size: 12px;" onkeydown="if(event.key==='Enter') app.submitManualScan('${headId}', '${mode}')">
+                  <button onclick="app.submitManualScan('${headId}', '${mode}')" class="btn btn-secondary btn-sm" style="padding: 0 14px;">Verify</button>
+                </div>
+              </div>
+
+              <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 11px; color: var(--text-dim);">
+                  Auto-scans via Camera (jsQR engine)
+                </div>
+                <button onclick="app.closeScannerModal()" class="btn btn-secondary btn-sm">Done & Close</button>
+              </div>
+            </div>
+          </div>
+        `;
+
+        this.startScannerCamera(headId, mode);
+      },
+
+      async startScannerCamera(headId, mode) {
+        this._scannerRunning = true;
+        this._scannerLastScanTime = 0;
+        const video = document.getElementById("scanner-video");
+        const statusBox = document.getElementById("scanner-status");
+
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment" }
+          });
+          this._scannerStream = stream;
+          if (video) {
+            video.srcObject = stream;
+            video.setAttribute("playsinline", true);
+            await video.play();
+          }
+
+          if (statusBox) statusBox.innerHTML = `🟢 <strong>Camera Active</strong>: Align QR code in frame...`;
+
+          requestAnimationFrame(() => this.scanVideoLoop(headId, mode));
+        } catch (err) {
+          console.warn("Camera access failed or unavailable:", err);
+          if (statusBox) {
+            statusBox.innerHTML = `⚠️ <strong>Camera unavailable:</strong> ${err.message || 'Permission denied'}. Please use the manual fallback below.`;
+            statusBox.style.color = "#f59e0b";
+          }
+        }
+      },
+
+      scanVideoLoop(headId, mode) {
+        if (!this._scannerRunning) return;
+
+        const video = document.getElementById("scanner-video");
+        const canvas = document.getElementById("scanner-canvas");
+
+        if (video && video.readyState === video.HAVE_ENOUGH_DATA) {
+          if (!canvas) return;
+          const ctx = canvas.getContext("2d", { willReadFrequently: true });
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+          if (window.jsQR) {
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: "dontInvert"
+            });
+
+            if (code && code.data) {
+              const now = Date.now();
+              if (now - this._scannerLastScanTime > 2500) {
+                this._scannerLastScanTime = now;
+                this.handleScannedPayload(code.data, headId, mode);
+              }
+            }
+          }
+        }
+
+        if (this._scannerRunning) {
+          requestAnimationFrame(() => this.scanVideoLoop(headId, mode));
+        }
+      },
+
+      handleScannedPayload(payload, headId, mode = 'attendance') {
+        const clean = (payload || '').trim();
+        let targetInvoice = clean;
+        let targetMobile = null;
+
+        if (clean.includes('|')) {
+          const parts = clean.split('|');
+          if (parts[0] === 'CREA' && parts.length >= 3) {
+            const typeFlag = parts[1].toUpperCase();
+            if (typeFlag === 'ENTRY') mode = 'attendance';
+            if (typeFlag === 'GIFT') mode = 'gift';
+            targetInvoice = parts[2];
+            if (parts.length >= 5) targetMobile = parts[4];
+          }
+        }
+
+        const head = this.data.heads.find(h => h.id === headId);
+        const resultBox = document.getElementById("scanner-result");
+        const statusBox = document.getElementById("scanner-status");
+
+        const payment = this.data.payments.find(p =>
+          p.invoiceNo.toUpperCase() === targetInvoice.toUpperCase() ||
+          (targetMobile && p.payerMobile === targetMobile) ||
+          p.payerMobile === targetInvoice ||
+          p.id === targetInvoice ||
+          clean.includes(p.invoiceNo.toUpperCase())
+        );
+
+        if (!payment) {
+          this.playBeep('error');
+          if (resultBox) {
+            resultBox.style.display = "block";
+            resultBox.innerHTML = `
+              <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 8px; padding: 12px; color: #fca5a5; font-size: 13px;">
+                <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">❌ INVALID TICKET</div>
+                <div>No paid registration record found matching: <strong>${targetInvoice}</strong></div>
+              </div>
+            `;
+          }
+          if (statusBox) statusBox.innerHTML = `<span style="color: #ef4444;">❌ Scan Rejected: Unrecognized ticket.</span>`;
+          return;
+        }
+
+        if (head && payment.headId && payment.headId !== head.id && payment.headCode !== head.code) {
+          this.playBeep('warning');
+          if (resultBox) {
+            resultBox.style.display = "block";
+            resultBox.innerHTML = `
+              <div style="background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; border-radius: 8px; padding: 12px; color: #fde68a; font-size: 13px;">
+                <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">⚠️ WRONG EVENT TICKET</div>
+                <div>This ticket is registered for: <strong>${payment.headTitle}</strong></div>
+                <div style="margin-top: 4px; font-size: 11px; color: var(--text-muted);">Delegate: ${payment.payerName} (${payment.payerMobile})</div>
+              </div>
+            `;
+          }
+          if (statusBox) statusBox.innerHTML = `<span style="color: #f59e0b;">⚠️ Wrong event ticket presented.</span>`;
+          return;
+        }
+
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+
+        if (mode === 'attendance') {
+          if (!payment.attended) {
+            payment.attended = true;
+            payment.attendedAt = now.toISOString();
+            this.playBeep('success');
+
+            if (resultBox) {
+              resultBox.style.display = "block";
+              resultBox.innerHTML = `
+                <div style="background: rgba(16, 185, 129, 0.15); border: 2px solid #10b981; border-radius: 10px; padding: 14px; color: #6ee7b7;">
+                  <div style="font-weight: 800; font-size: 16px; color: #34d399; margin-bottom: 6px;">
+                    ✅ ENTRY GRANTED (First Check-In)
+                  </div>
+                  <div style="font-size: 14px; color: #fff; font-weight: 700;">${payment.payerName}</div>
+                  <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                    Mobile: <strong>${payment.payerMobile}</strong> • <span class="badge badge-${payment.payerCategory}">${payment.payerCategory.replace('_', ' ')}</span>
+                  </div>
+                  <div style="font-size: 11.5px; color: #38bdf8; margin-top: 6px;">
+                    Invoice: ${payment.invoiceNo} • Paid ₹${payment.totalAmount.toLocaleString('en-IN')}
+                  </div>
+                  <div style="font-size: 11px; color: #a7f3d0; margin-top: 4px;">
+                    🕒 Checked in at ${timeStr}
+                  </div>
+                </div>
+              `;
+            }
+            if (statusBox) statusBox.innerHTML = `<span style="color: #34d399;">✅ <strong>${payment.payerName}</strong> marked as Present!</span>`;
+          } else {
+            this.playBeep('success');
+            const prevTime = new Date(payment.attendedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+
+            if (resultBox) {
+              resultBox.style.display = "block";
+              resultBox.innerHTML = `
+                <div style="background: rgba(56, 189, 248, 0.15); border: 2px solid #38bdf8; border-radius: 10px; padding: 14px; color: #bae6fd;">
+                  <div style="font-weight: 800; font-size: 16px; color: #38bdf8; margin-bottom: 6px;">
+                    ℹ️ RE-ENTRY PERMITTED
+                  </div>
+                  <div style="font-size: 14px; color: #fff; font-weight: 700;">${payment.payerName}</div>
+                  <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                    Mobile: <strong>${payment.payerMobile}</strong> • <span class="badge badge-${payment.payerCategory}">${payment.payerCategory.replace('_', ' ')}</span>
+                  </div>
+                  <div style="font-size: 11.5px; color: #93c5fd; margin-top: 6px;">
+                    Invoice: ${payment.invoiceNo}
+                  </div>
+                  <div style="font-size: 11px; color: #60a5fa; margin-top: 4px;">
+                    🕒 Original Entry Recorded: ${prevTime} (Access Permitted)
+                  </div>
+                </div>
+              `;
+            }
+            if (statusBox) statusBox.innerHTML = `<span style="color: #38bdf8;">ℹ️ <strong>${payment.payerName}</strong> Re-Entry Verified.</span>`;
+          }
+        } else {
+          if (!payment.giftCollected) {
+            payment.giftCollected = true;
+            payment.giftCollectedAt = now.toISOString();
+            this.playBeep('success');
+
+            if (resultBox) {
+              resultBox.style.display = "block";
+              resultBox.innerHTML = `
+                <div style="background: rgba(168, 85, 247, 0.15); border: 2px solid #a855f7; border-radius: 10px; padding: 14px; color: #e9d5ff;">
+                  <div style="font-weight: 800; font-size: 16px; color: #c084fc; margin-bottom: 6px;">
+                    🎁 WELCOME GIFT / DELEGATE KIT HANDED OVER
+                  </div>
+                  <div style="font-size: 14px; color: #fff; font-weight: 700;">${payment.payerName}</div>
+                  <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                    Mobile: <strong>${payment.payerMobile}</strong> • <span class="badge badge-${payment.payerCategory}">${payment.payerCategory.replace('_', ' ')}</span>
+                  </div>
+                  <div style="font-size: 11.5px; color: #c084fc; margin-top: 6px;">
+                    Invoice: ${payment.invoiceNo}
+                  </div>
+                  <div style="font-size: 11px; color: #e9d5ff; margin-top: 4px;">
+                    🕒 Claimed at ${timeStr}
+                  </div>
+                </div>
+              `;
+            }
+            if (statusBox) statusBox.innerHTML = `<span style="color: #c084fc;">🎁 Delegate kit marked as collected for <strong>${payment.payerName}</strong>!</span>`;
+          } else {
+            this.playBeep('warning');
+            const prevTime = new Date(payment.giftCollectedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+
+            if (resultBox) {
+              resultBox.style.display = "block";
+              resultBox.innerHTML = `
+                <div style="background: rgba(239, 68, 68, 0.2); border: 2px solid #ef4444; border-radius: 10px; padding: 14px; color: #fca5a5;">
+                  <div style="font-weight: 800; font-size: 16px; color: #f87171; margin-bottom: 6px;">
+                    ⚠️ ALREADY CLAIMED: DUPLICATE KIT BLOCKED
+                  </div>
+                  <div style="font-size: 14px; color: #fff; font-weight: 700;">${payment.payerName}</div>
+                  <div style="font-size: 12px; color: #fca5a5; margin-top: 2px;">
+                    Mobile: <strong>${payment.payerMobile}</strong>
+                  </div>
+                  <div style="font-size: 12px; color: #fca5a5; margin-top: 6px;">
+                    This delegate already collected their Welcome Gift at <strong>${prevTime}</strong>. Do NOT issue another gift kit!
+                  </div>
+                </div>
+              `;
+            }
+            if (statusBox) statusBox.innerHTML = `<span style="color: #f87171;">⚠️ Duplicate Gift Claim Blocked for ${payment.payerName}.</span>`;
+          }
+        }
+
+        this.saveToStorage();
+
+        try {
+          fetch("/api/attendance", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              invoiceNo: payment.invoiceNo,
+              headId: head ? head.id : null,
+              mode
+            })
+          });
+        } catch(err) {}
+      },
+
+      submitManualScan(headId, mode) {
+        const input = document.getElementById("manual-scan-input");
+        if (!input || !input.value.trim()) {
+          alert("Please enter an Invoice Number or Registered Mobile Number.");
+          return;
+        }
+        this.handleScannedPayload(input.value.trim(), headId, mode);
+      },
+
+      closeScannerModal(event) {
+        if (event && event.target && event.target !== event.currentTarget) return;
+        this.stopScanner();
+        this.closeModal();
+        this.render();
+      },
+
+      stopScanner() {
+        this._scannerRunning = false;
+        if (this._scannerStream) {
+          try {
+            this._scannerStream.getTracks().forEach(track => track.stop());
+          } catch(err) {}
+          this._scannerStream = null;
+        }
+      },
+
+      playBeep(type = 'success') {
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContext) return;
+          const ctx = new AudioContext();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+
+          if (type === 'success') {
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.15);
+            gain.gain.setValueAtTime(0.15, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.2);
+          } else if (type === 'warning') {
+            osc.frequency.setValueAtTime(440, ctx.currentTime);
+            osc.frequency.setValueAtTime(330, ctx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.2, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.25);
+          } else {
+            osc.frequency.setValueAtTime(220, ctx.currentTime);
+            gain.gain.setValueAtTime(0.25, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.3);
+          }
+        } catch(e) {}
+      },
+
+      // DELEGATE ATTENDANCE & GIFT TRACKER (Roster)
+      openDelegateTracker(headId, searchTerm = '') {
+        const head = this.data.heads.find(h => h.id === headId);
+        if (!head) return;
+
+        let registrations = this.data.payments.filter(p => p.headId === headId || p.headCode === head.code || p.headTitle === head.title);
+
+        const total = registrations.length;
+        const attendedCount = registrations.filter(p => p.attended).length;
+        const giftCount = registrations.filter(p => p.giftCollected).length;
+        const attendedPct = total > 0 ? Math.round((attendedCount / total) * 100) : 0;
+        const giftPct = total > 0 ? Math.round((giftCount / total) * 100) : 0;
+
+        if (searchTerm) {
+          const s = searchTerm.toLowerCase();
+          registrations = registrations.filter(p =>
+            p.payerName.toLowerCase().includes(s) ||
+            p.payerMobile.includes(s) ||
+            p.invoiceNo.toLowerCase().includes(s) ||
+            (p.payerGstin && p.payerGstin.toLowerCase().includes(s))
+          );
+        }
+
+        document.getElementById("modal-root").innerHTML = `
+          <div class="modal-overlay" onclick="app.closeModal(event)">
+            <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 920px;">
+              <div class="modal-header">
+                <div>
+                  <h3 style="font-size: 18px; font-weight: 700;">📊 Delegate Attendance & Gift Tracker</h3>
+                  <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">${head.title} (${head.eventDate || 'Scheduled'})</p>
+                </div>
+                <button class="modal-close" onclick="app.closeModal()">&times;</button>
+              </div>
+
+              <!-- Top Stats Summary -->
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px;">
+                <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 10px; padding: 12px 16px;">
+                  <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Total Registrations</div>
+                  <div style="font-size: 24px; font-weight: 800; color: #fff; margin-top: 4px;">${total}</div>
+                </div>
+                <div style="background: #090f1d; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 10px; padding: 12px 16px;">
+                  <div style="font-size: 11px; color: #38bdf8; text-transform: uppercase;">Gate Check-In (${attendedPct}%)</div>
+                  <div style="font-size: 24px; font-weight: 800; color: #38bdf8; margin-top: 4px;">${attendedCount} / ${total}</div>
+                </div>
+                <div style="background: #090f1d; border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 10px; padding: 12px 16px;">
+                  <div style="font-size: 11px; color: #c084fc; text-transform: uppercase;">Gifts Collected (${giftPct}%)</div>
+                  <div style="font-size: 24px; font-weight: 800; color: #c084fc; margin-top: 4px;">${giftCount} / ${total}</div>
+                </div>
+              </div>
+
+              <!-- Filter & Actions Bar -->
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px;">
+                <input type="text" id="roster-search" class="form-input" placeholder="Search by name, mobile, invoice..." value="${searchTerm}" style="max-width: 320px; padding: 6px 12px; font-size: 12px;" oninput="app.openDelegateTracker('${headId}', this.value)">
+                <div style="display: flex; gap: 8px;">
+                  <button onclick="app.openScannerModal('${headId}', 'attendance')" class="btn btn-secondary btn-sm" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);">📷 Scan Entry</button>
+                  <button onclick="app.openScannerModal('${headId}', 'gift')" class="btn btn-secondary btn-sm" style="color: #c084fc; border-color: rgba(168, 85, 247, 0.4);">🎁 Scan Gift</button>
+                  <button onclick="app.exportDelegateCSV('${headId}')" class="btn btn-primary btn-sm" style="font-size: 11.5px;">📥 Export Roster CSV</button>
+                </div>
+              </div>
+
+              <!-- Delegates Table -->
+              <div style="max-height: 380px; overflow-y: auto;">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Delegate & Category</th>
+                      <th>Mobile & GSTIN</th>
+                      <th>Invoice & Paid</th>
+                      <th>Gate Attendance</th>
+                      <th>Welcome Gift</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${registrations.length === 0 ? `
+                      <tr>
+                        <td colspan="5" style="text-align: center; color: var(--text-dim); padding: 24px;">No registrations found matching criteria.</td>
+                      </tr>
+                    ` : registrations.map(p => `
+                      <tr>
+                        <td>
+                          <strong>${p.payerName}</strong>
+                          <div style="font-size: 11px; margin-top: 2px;">
+                            <span class="badge badge-${p.payerCategory}">${p.payerCategory.replace('_', ' ')}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div>${p.payerMobile}</div>
+                          ${p.payerGstin ? `<div style="font-size: 10.5px; color: #38bdf8; font-family: monospace;">${p.payerGstin}</div>` : ''}
+                        </td>
+                        <td>
+                          <a href="#" onclick="event.preventDefault(); app.viewInvoice('${p.invoiceNo}')" style="color: #38bdf8; text-decoration: underline; font-size: 12px;">${p.invoiceNo}</a>
+                          <div style="font-size: 11px; color: var(--text-muted);">₹${p.totalAmount.toLocaleString('en-IN')}</div>
+                        </td>
+                        <td>
+                          ${p.attended ? `
+                            <button onclick="app.toggleAttendance('${p.invoiceNo}', '${headId}')" class="btn btn-sm" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #059669; font-size: 11px; padding: 4px 8px;" title="Click to undo check-in">
+                              ✓ Checked In (${new Date(p.attendedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })})
+                            </button>
+                          ` : `
+                            <button onclick="app.toggleAttendance('${p.invoiceNo}', '${headId}')" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px;">
+                              + Mark Entry
+                            </button>
+                          `}
+                        </td>
+                        <td>
+                          ${p.giftCollected ? `
+                            <button onclick="app.toggleGift('${p.invoiceNo}', '${headId}')" class="btn btn-sm" style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid #9333ea; font-size: 11px; padding: 4px 8px;" title="Click to undo gift handover">
+                              🎁 Claimed (${new Date(p.giftCollectedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })})
+                            </button>
+                          ` : `
+                            <button onclick="app.toggleGift('${p.invoiceNo}', '${headId}')" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px;">
+                              + Hand Over Gift
+                            </button>
+                          `}
+                        </td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style="margin-top: 18px; text-align: right;">
+                <button onclick="app.closeModal(); app.render();" class="btn btn-secondary btn-sm">Close</button>
+              </div>
+            </div>
+          </div>
+        `;
+      },
+
+      toggleAttendance(invoiceNo, headId) {
+        const payment = this.data.payments.find(p => p.invoiceNo === invoiceNo);
+        if (!payment) return;
+        payment.attended = !payment.attended;
+        payment.attendedAt = payment.attended ? new Date().toISOString() : null;
+        this.saveToStorage();
+        this.openDelegateTracker(headId);
+      },
+
+      toggleGift(invoiceNo, headId) {
+        const payment = this.data.payments.find(p => p.invoiceNo === invoiceNo);
+        if (!payment) return;
+        payment.giftCollected = !payment.giftCollected;
+        payment.giftCollectedAt = payment.giftCollected ? new Date().toISOString() : null;
+        this.saveToStorage();
+        this.openDelegateTracker(headId);
+      },
+
+      exportDelegateCSV(headId) {
+        const head = this.data.heads.find(h => h.id === headId);
+        if (!head) return;
+
+        const registrations = this.data.payments.filter(p => p.headId === headId || p.headCode === head.code || p.headTitle === head.title);
+
+        const rows = [
+          ["Invoice No", "Date Paid", "Attendee Name", "Mobile", "Email", "Category", "GSTIN", "Billing Address", "Paid INR", "Gate Attendance", "Attendance Timestamp", "Gift Collected", "Gift Timestamp"]
+        ];
+
+        registrations.forEach(p => {
+          rows.push([
+            p.invoiceNo,
+            p.date,
+            `"${p.payerName}"`,
+            p.payerMobile,
+            p.payerEmail,
+            p.payerCategory,
+            `"${p.payerGstin || ''}"`,
+            `"${(p.payerAddress || '').replace(/"/g, '""')}"`,
+            p.totalAmount,
+            p.attended ? "YES" : "NO",
+            p.attendedAt || "",
+            p.giftCollected ? "YES" : "NO",
+            p.giftCollectedAt || ""
+          ]);
+        });
+
+        const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `CREA_Roster_${head.code}_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      },
+
+      // 1-CLICK YEARLY MEMBERSHIP RENEWAL (1st April Cycle)
       triggerYearlyRenewal() {
-        if (!confirm("Activate 1-Click Yearly Membership Renewal? This will promote 'New Member' accounts to regular 'Member' and create a new Membership renewal payment head.")) return;
+        if (!confirm("Activate 1-Click Yearly Membership Renewal? This will deactivate all members for the upcoming financial year until new membership dues are settled.")) return;
 
         const nextYear = new Date().getFullYear() + 1;
+        const fy = `${String(nextYear).slice(-2)}${String(nextYear + 1).slice(-2)}`;
 
-        // Promote new_member -> member
+        // Deactivate all members for new FY
         this.data.members.forEach(m => {
-          if (m.category === "new_member") m.category = "member";
+          m.status = "deactivated";
+          m.lastPaidFY = null;
+          m.deactivationReason = `Pending Annual Renewal for FY ${nextYear}-${nextYear + 1}`;
         });
 
         // Add renewal head
@@ -2659,20 +3850,21 @@ Participants receive official CREA(I) accreditation credits, certified study mat
           venue: "All Regional Chapters",
           activeUntil: `${nextYear + 1}-03-31T23:59:59`,
           status: "active",
-          prices: { new_member: 12000, member: 10000, board_member: 8000, non_member: null },
+          prices: { associate_member: 5000, member: 10000, board_member: 8000, non_member: null },
           writeup: `Annual membership renewal for accredited real estate brokerages for ${nextYear}-${nextYear + 1}. Unlocks full integration with CREA Multi-Listing Exchange, legal escrow protection, and certified broker masterclasses.`
         };
 
         this.data.heads.unshift(renewalHead);
+        this.normalizeData();
         this.saveToStorage();
-        alert(`Yearly Membership Renewal Activated! Head '${renewalHead.title}' published and all New Members upgraded to Regular Members.`);
+        alert(`Yearly Membership Renewal Activated! Head '${renewalHead.title}' published and all members queued for FY ${nextYear}-${nextYear + 1} dues payment.`);
         this.render();
       },
 
-      // EXPORT CSV
+      // EXPORT CSV (Full Ledger)
       exportCSV() {
         const rows = [
-          ["Invoice Number", "Date", "Payer Name", "Mobile", "Email", "Payer Type", "Category", "Program Head", "Head Code", "Base (INR)", "CGST 9% (INR)", "SGST 9% (INR)", "Total Paid (INR)", "Status"]
+          ["Invoice Number", "Date", "Payer Name", "Mobile", "Email", "Payer Type", "Category", "Payer GSTIN", "Billing Address", "Program Head", "Head Code", "Base (INR)", "CGST 9% (INR)", "SGST 9% (INR)", "Total Paid (INR)", "Status", "Attended", "Attended At", "Gift Collected", "Gift Collected At", "Payment Method"]
         ];
 
         this.data.payments.forEach(p => {
@@ -2684,13 +3876,20 @@ Participants receive official CREA(I) accreditation credits, certified study mat
             p.payerEmail,
             p.payerType,
             p.payerCategory,
+            `"${p.payerGstin || ''}"`,
+            `"${(p.payerAddress || '').replace(/"/g, '""')}"`,
             `"${p.headTitle}"`,
             p.headCode,
             p.baseAmount,
             p.cgst,
             p.sgst,
             p.totalAmount,
-            p.status
+            p.status,
+            p.attended ? "YES" : "NO",
+            p.attendedAt || "",
+            p.giftCollected ? "YES" : "NO",
+            p.giftCollectedAt || "",
+            `"${p.method || ''}"`
           ]);
         });
 
@@ -2707,12 +3906,12 @@ Participants receive official CREA(I) accreditation credits, certified study mat
       // SIMULATE 10 PAYMENTS
       simulatePayments() {
         const sampleGuests = [
-          { name: "Vikram Singhania", mobile: "9811223344", email: "vikram@singhaniarealty.in" },
-          { name: "Neha Chhabra", mobile: "9822334455", email: "neha@chhabrahomes.com" },
-          { name: "Arun Alva", mobile: "9833445566", email: "arun@alvabrokerage.co" }
+          { name: "Vikram Singhania", mobile: "9811223344", email: "vikram@singhaniarealty.in", gstin: "29AABCU9603R1ZM", address: "102 Lavelle Road, Bangalore" },
+          { name: "Neha Chhabra", mobile: "9822334455", email: "neha@chhabrahomes.com", gstin: "29AADCP9912K1Z8", address: "84 Residency Road, Bangalore" },
+          { name: "Arun Alva", mobile: "9833445566", email: "arun@alvabrokerage.co", gstin: "", address: "304 Koramangala 4th Block, Bangalore" }
         ];
 
-        const fy = "2627";
+        const fy = this.getFinancialYear();
 
         for (let i = 0; i < 10; i++) {
           const isMember = Math.random() > 0.4;
@@ -2730,7 +3929,6 @@ Participants receive official CREA(I) accreditation credits, certified study mat
             payerId = null;
           }
 
-          // Pick active head
           const validHeads = this.data.heads.filter(h => (h.status !== 'deactivated' && h.status !== 'inactive') && h.prices[cat] !== null && h.prices[cat] !== undefined);
           if (validHeads.length === 0) continue;
           const head = validHeads[Math.floor(Math.random() * validHeads.length)];
@@ -2760,6 +3958,12 @@ Participants receive official CREA(I) accreditation credits, certified study mat
             payerName: payer.name,
             payerMobile: payer.mobile,
             payerEmail: payer.email,
+            payerGstin: payer.gstin || "",
+            payerAddress: payer.address || "",
+            attended: Math.random() > 0.5,
+            attendedAt: new Date().toISOString(),
+            giftCollected: Math.random() > 0.6,
+            giftCollectedAt: new Date().toISOString(),
             baseAmount: base,
             cgst,
             sgst,
@@ -2770,6 +3974,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
           });
         }
 
+        this.normalizeData();
         this.saveToStorage();
         alert("Simulated 10 additional transactions successfully!");
         this.render();
@@ -2781,6 +3986,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         this.data.payments = [];
         this.data.emailLogs = [];
         this.data.invoiceCounter = 0;
+        this.normalizeData();
         this.saveToStorage();
         alert("All payments cleared. Invoice numbering reset to 0001.");
         this.render();

@@ -26,9 +26,18 @@ CREATE TABLE IF NOT EXISTS public.members (
   name TEXT NOT NULL,
   mobile TEXT NOT NULL UNIQUE,
   email TEXT NOT NULL,
-  category TEXT NOT NULL CHECK (category IN ('member', 'new_member', 'board_member')) DEFAULT 'member',
+  category TEXT NOT NULL CHECK (category IN ('member', 'associate_member', 'board_member')) DEFAULT 'member',
+  parent_member_id TEXT DEFAULT NULL,
+  parent_member_name TEXT DEFAULT NULL,
+  parent_member_mobile TEXT DEFAULT NULL,
   company TEXT NOT NULL DEFAULT 'Independent Broker',
   city TEXT NOT NULL DEFAULT 'Bangalore',
+  gstin TEXT DEFAULT NULL,
+  address TEXT DEFAULT NULL,
+  status TEXT NOT NULL CHECK (status IN ('active', 'deactivated')) DEFAULT 'active',
+  last_paid_fy TEXT DEFAULT '2627',
+  payment_means TEXT DEFAULT NULL,
+  activation_note TEXT DEFAULT NULL,
   joined_date DATE NOT NULL DEFAULT CURRENT_DATE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
@@ -37,6 +46,8 @@ CREATE TABLE IF NOT EXISTS public.members (
 CREATE INDEX IF NOT EXISTS idx_members_mobile ON public.members(mobile);
 CREATE INDEX IF NOT EXISTS idx_members_email ON public.members(email);
 CREATE INDEX IF NOT EXISTS idx_members_category ON public.members(category);
+CREATE INDEX IF NOT EXISTS idx_members_status ON public.members(status);
+CREATE INDEX IF NOT EXISTS idx_members_parent ON public.members(parent_member_id);
 
 CREATE TRIGGER trg_members_updated_at
 BEFORE UPDATE ON public.members
@@ -53,7 +64,7 @@ CREATE TABLE IF NOT EXISTS public.payment_heads (
   venue TEXT DEFAULT 'CREA(I) Centre, Bangalore',
   active_until TIMESTAMPTZ NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('active', 'inactive', 'deactivated')) DEFAULT 'active',
-  prices JSONB NOT NULL DEFAULT '{"new_member": null, "member": null, "board_member": null, "non_member": null}'::jsonb,
+  prices JSONB NOT NULL DEFAULT '{"associate_member": null, "member": null, "board_member": null, "non_member": null}'::jsonb,
   writeup TEXT DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
@@ -84,11 +95,13 @@ CREATE TABLE IF NOT EXISTS public.payments (
   head_code TEXT NOT NULL,
   head_title TEXT NOT NULL,
   payer_type TEXT NOT NULL CHECK (payer_type IN ('member', 'non_member')),
-  payer_category TEXT NOT NULL CHECK (payer_category IN ('new_member', 'member', 'board_member', 'non_member')),
+  payer_category TEXT NOT NULL CHECK (payer_category IN ('associate_member', 'member', 'board_member', 'non_member')),
   payer_id TEXT REFERENCES public.members(id) ON DELETE SET NULL,
   payer_name TEXT NOT NULL,
   payer_mobile TEXT NOT NULL,
   payer_email TEXT NOT NULL,
+  payer_gstin TEXT DEFAULT NULL,
+  payer_address TEXT DEFAULT NULL,
   base_amount NUMERIC(12, 2) NOT NULL,
   cgst NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
   sgst NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
@@ -96,6 +109,10 @@ CREATE TABLE IF NOT EXISTS public.payments (
   total_amount NUMERIC(12, 2) NOT NULL,
   status TEXT NOT NULL DEFAULT 'success' CHECK (status IN ('success', 'pending', 'failed', 'refunded')),
   method TEXT DEFAULT 'Simulated Gateway (Instant Checkout)',
+  attended BOOLEAN NOT NULL DEFAULT false,
+  attended_at TIMESTAMPTZ DEFAULT NULL,
+  gift_collected BOOLEAN NOT NULL DEFAULT false,
+  gift_collected_at TIMESTAMPTZ DEFAULT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
@@ -104,6 +121,8 @@ CREATE INDEX IF NOT EXISTS idx_payments_payer_mobile ON public.payments(payer_mo
 CREATE INDEX IF NOT EXISTS idx_payments_payer_email ON public.payments(payer_email);
 CREATE INDEX IF NOT EXISTS idx_payments_head_id ON public.payments(head_id);
 CREATE INDEX IF NOT EXISTS idx_payments_date ON public.payments(date DESC);
+CREATE INDEX IF NOT EXISTS idx_payments_attended ON public.payments(attended);
+CREATE INDEX IF NOT EXISTS idx_payments_gift ON public.payments(gift_collected);
 
 -- 7. Email Dispatch Audit Logs Table
 CREATE TABLE IF NOT EXISTS public.email_logs (

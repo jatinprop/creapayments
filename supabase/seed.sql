@@ -3,20 +3,24 @@
 -- ==============================================================================
 
 -- 1. Seed Members
-INSERT INTO public.members (id, name, mobile, email, category, company, city, joined_date)
+INSERT INTO public.members (id, name, mobile, email, category, company, city, status, last_paid_fy, payment_means, activation_note, joined_date)
 VALUES
-  ('mem-001', 'Ramesh Gupta', '9800000001', 'ramesh.gupta@crea-realty.in', 'member', 'Apex Prime Realty', 'Bangalore', '2024-04-10'),
-  ('mem-002', 'Sneha Patel', '9800000002', 'sneha.p@lotushomes.co', 'new_member', 'Lotus Property Consultants', 'Bangalore', '2026-06-15'),
-  ('mem-003', 'Vikramaditya Rao', '9800000003', 'v.rao@deccanproperties.com', 'board_member', 'Deccan Realtors & Estates', 'Bangalore', '2021-01-20'),
-  ('mem-004', 'Anand Murthy', '9845999000', 'anand.m@staypolis.com', 'member', 'Staypolis Brokerage', 'Bangalore', '2023-08-01'),
-  ('mem-005', 'Kavita Reddy', '9711288901', 'kavita.r@reddyrealty.in', 'new_member', 'Reddy Associates', 'Bangalore', '2026-08-12')
+  ('mem-001', 'Ramesh Gupta', '9800000001', 'ramesh.gupta@crea-realty.in', 'member', 'Apex Prime Realty', 'Bangalore', 'active', '2627', 'Online Gateway', 'Renewed FY 2627', '2024-04-10'),
+  ('mem-002', 'Sneha Patel', '9800000002', 'sneha.p@lotushomes.co', 'new_member', 'Lotus Property Consultants', 'Bangalore', 'active', '2627', 'Online Gateway', 'Joined & Paid FY 2627', '2026-06-15'),
+  ('mem-003', 'Vikramaditya Rao', '9800000003', 'v.rao@deccanproperties.com', 'board_member', 'Deccan Realtors & Estates', 'Bangalore', 'active', '2627', 'Online Gateway', 'Board Member Exemption / Paid', '2021-01-20'),
+  ('mem-004', 'Anand Murthy', '9845999000', 'anand.m@staypolis.com', 'member', 'Staypolis Brokerage', 'Bangalore', 'active', '2627', 'Online Gateway', 'Renewed FY 2627', '2023-08-01'),
+  ('mem-005', 'Kavita Reddy', '9711288901', 'kavita.r@reddyrealty.in', 'new_member', 'Reddy Associates', 'Bangalore', 'deactivated', NULL, NULL, 'Pending FY 2026-27 Annual Renewal', '2026-08-12')
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   mobile = EXCLUDED.mobile,
   email = EXCLUDED.email,
   category = EXCLUDED.category,
   company = EXCLUDED.company,
-  city = EXCLUDED.city;
+  city = EXCLUDED.city,
+  status = EXCLUDED.status,
+  last_paid_fy = EXCLUDED.last_paid_fy,
+  payment_means = EXCLUDED.payment_means,
+  activation_note = EXCLUDED.activation_note;
 
 -- 2. Seed Payment Heads
 INSERT INTO public.payment_heads (id, code, title, type, event_date, event_time, venue, active_until, status, prices, writeup)

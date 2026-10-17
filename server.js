@@ -608,7 +608,7 @@ const server = http.createServer((req, res) => {
         return res.end(JSON.stringify({ success: false, error: "Invalid JSON" }));
       }
 
-      const { headId, payerType, payerCategory, payerId, payerName, payerMobile, payerEmail } = body;
+      const { headId, payerType, payerCategory, payerId, payerName, payerMobile, payerEmail, payerGstin, payerAddress } = body;
       const data = readData();
       const head = data.heads.find((h) => h.id === headId);
 
@@ -664,6 +664,10 @@ const server = http.createServer((req, res) => {
         payerName: payerName || "Anonymous Payer",
         payerMobile: payerMobile || "",
         payerEmail: payerEmail || "",
+        payerGstin: (payerGstin || "").trim().toUpperCase(),
+        payerAddress: (payerAddress || "").trim(),
+        attended: false,
+        giftCollected: false,
         baseAmount: base,
         cgst,
         sgst,
@@ -674,6 +678,18 @@ const server = http.createServer((req, res) => {
       };
 
       data.payments.unshift(newPayment);
+
+      // Auto-activate member if payment is for membership
+      const isMembershipPayment = head.code === "MEM" || head.type === "membership" || (head.title && head.title.toLowerCase().includes("membership"));
+      if (isMembershipPayment && (payerId || payerMobile)) {
+        const mem = data.members.find((m) => m.id === payerId || m.mobile === payerMobile);
+        if (mem) {
+          mem.status = "active";
+          mem.lastPaidFY = fy;
+          mem.paymentMeans = "Online Gateway";
+          mem.activationNote = `Online Payment (Invoice ${invoiceNo})`;
+        }
+      }
 
       // Email dispatch record
       const emailRecord = {
@@ -816,8 +832,17 @@ const server = http.createServer((req, res) => {
           mobile: member.mobile.trim(),
           email: member.email.trim(),
           category: member.category || "member",
+          parentMemberId: member.parentMemberId || null,
+          parentMemberName: member.parentMemberName || null,
+          parentMemberMobile: member.parentMemberMobile || null,
+          gstin: member.gstin ? member.gstin.trim().toUpperCase() : null,
+          address: member.address ? member.address.trim() : null,
           company: member.company || "Independent Broker",
           city: member.city || "Bangalore",
+          status: member.status || "active",
+          lastPaidFY: member.lastPaidFY || "2627",
+          paymentMeans: member.paymentMeans || null,
+          activationNote: member.activationNote || null,
           joinedDate: new Date().toISOString().split("T")[0]
         };
         data.members.push(newMem);
@@ -847,17 +872,108 @@ const server = http.createServer((req, res) => {
     });
   }
 
+  // API ROUTE 4B: POST /api/member/status (Toggle Activate / Deactivate)
+  if (req.method === "POST" && pathname === "/api/member/status") {
+    return readBody((err, body) => {
+      if (err || !body.id || !body.status) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: false, error: "Member ID and status are required." }));
+      }
+      const data = readData();
+      const mem = data.members.find((m) => m.id === body.id);
+      if (!mem) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: false, error: "Member not found." }));
+      }
+      mem.status = body.status;
+      writeData(data);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ success: true, member: mem }));
+    });
+  }
+
+  // API ROUTE 4C: POST /api/member/activate-manual (Admin manual activation with payment means & note)
+  if (req.method === "POST" && pathname === "/api/member/activate-manual") {
+    return readBody((err, body) => {
+      if (err || !body.id) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: false, error: "Member ID is required." }));
+      }
+      const data = readData();
+      const mem = data.members.find((m) => m.id === body.id);
+      if (!mem) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: false, error: "Member not found." }));
+      }
+
+      const fy = getFinancialYearCode();
+      mem.status = "active";
+      mem.lastPaidFY = fy;
+      mem.paymentMeans = body.paymentMeans || "Manual Verification";
+      mem.activationNote = body.description || "Admin activated membership";
+
+      let paymentRecord = null;
+      if (body.createInvoice) {
+        const head = data.heads.find((h) => h.id === body.headId || h.code === "MEM") || data.heads[0];
+        if (head) {
+          const base = Number(head.prices[mem.category] || 10000);
+          const cgst = Math.round(base * 0.09 * 100) / 100;
+          const sgst = Math.round(base * 0.09 * 100) / 100;
+          const totalGst = Math.round((cgst + sgst) * 100) / 100;
+          const total = Math.round((base + totalGst) * 100) / 100;
+          const now = new Date().toISOString();
+
+          const nextSerial = (data.invoiceCounter || 0) + 1;
+          data.invoiceCounter = nextSerial;
+          const serialStr = String(nextSerial).padStart(4, "0");
+          const invoiceNo = `CREA/${fy}/${head.code.toUpperCase()}/${serialStr}`;
+
+          paymentRecord = {
+            id: `pay-${Date.now()}`,
+            invoiceNo,
+            serial: nextSerial,
+            date: now,
+            headId: head.id,
+            headCode: head.code,
+            headTitle: head.title,
+            payerType: "member",
+            payerCategory: mem.category,
+            payerId: mem.id,
+            payerName: mem.name,
+            payerMobile: mem.mobile,
+            payerEmail: mem.email,
+            baseAmount: base,
+            cgst,
+            sgst,
+            totalGst,
+            totalAmount: total,
+            status: "success",
+            method: `Manual Admin (${mem.paymentMeans}): ${mem.activationNote}`
+          };
+          data.payments.unshift(paymentRecord);
+        }
+      }
+
+      writeData(data);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ success: true, member: mem, payment: paymentRecord }));
+    });
+  }
+
   // API ROUTE 5: POST /api/renew (1-Click Yearly Renewal)
   if (req.method === "POST" && pathname === "/api/renew") {
     const data = readData();
     const nextYear = new Date().getFullYear() + 1;
     const fyCode = `${String(nextYear).slice(-2)}${String(nextYear + 1).slice(-2)}`;
 
-    // Convert new_member to member
+    // Convert new_member to member and deactivate members for the new cycle
     data.members.forEach((m) => {
       if (m.category === "new_member") {
         m.category = "member";
       }
+      m.status = "deactivated";
+      m.lastPaidFY = null;
+      m.activationNote = `Pending Annual Renewal for FY ${nextYear}-${nextYear + 1}`;
     });
 
     // Create a new membership head
@@ -872,7 +988,7 @@ const server = http.createServer((req, res) => {
       activeUntil: `${nextYear + 1}-03-31T23:59:59`,
       status: "active",
       prices: {
-        new_member: 12000,
+        associate_member: 5000,
         member: 10000,
         board_member: 8000,
         non_member: null
@@ -886,9 +1002,90 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" });
     return res.end(JSON.stringify({
       success: true,
-      message: `Annual Renewal successfully activated for all members! Head '${renewalHead.title}' created and New Members promoted to Regular Members.`,
+      message: `Annual Renewal successfully activated! Head '${renewalHead.title}' created and members queued for renewal.`,
       head: renewalHead
     }));
+  }
+
+  // API ROUTE 5B: POST /api/attendance (Mark Attendance or Gift Claim)
+  if (req.method === "POST" && pathname === "/api/attendance") {
+    return readBody((err, body) => {
+      if (err || !body.invoiceNo) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: false, error: "Invoice number or QR data required." }));
+      }
+      const data = readData();
+      const cleanInv = (body.invoiceNo || "").trim().toUpperCase();
+      const payment = data.payments.find((p) =>
+        p.invoiceNo.toUpperCase() === cleanInv ||
+        (p.id && p.id.toUpperCase() === cleanInv) ||
+        cleanInv.includes(p.invoiceNo.toUpperCase())
+      );
+
+      if (!payment) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: false, error: `Invalid Ticket: No registration found for "${cleanInv}".` }));
+      }
+
+      if (body.headId && payment.headId && payment.headId !== body.headId && payment.headCode !== body.headId) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: false, error: `Wrong Event Ticket: This ticket is for "${payment.headTitle}".`, payment }));
+      }
+
+      const mode = body.mode || "attendance";
+      const now = new Date().toISOString();
+
+      if (mode === "attendance" || mode === "entry") {
+        if (!payment.attended) {
+          payment.attended = true;
+          payment.attendedAt = now;
+          writeData(data);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({
+            success: true,
+            type: "attendance",
+            status: "first_entry",
+            message: "✓ ENTRY GRANTED (First Check-In)",
+            payment
+          }));
+        } else {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({
+            success: true,
+            type: "attendance",
+            status: "re_entry",
+            message: `ℹ️ RE-ENTRY PERMITTED (Checked in at ${new Date(payment.attendedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })})`,
+            payment
+          }));
+        }
+      } else if (mode === "gift" || mode === "kit") {
+        if (!payment.giftCollected) {
+          payment.giftCollected = true;
+          payment.giftCollectedAt = now;
+          writeData(data);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({
+            success: true,
+            type: "gift",
+            status: "gift_dispatched",
+            message: "🎁 GIFT / DELEGATE KIT DISPATCHED",
+            payment
+          }));
+        } else {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({
+            success: false,
+            type: "gift",
+            status: "already_claimed",
+            message: `⚠️ ALREADY CLAIMED: Gift was already collected at ${new Date(payment.giftCollectedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}.`,
+            payment
+          }));
+        }
+      }
+
+      res.writeHead(400, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ success: false, error: "Invalid mode." }));
+    });
   }
 
   // API ROUTE 6: POST /api/reset (Clear All Demo Payments)

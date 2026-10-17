@@ -50,6 +50,10 @@ async function seed() {
       category: m.category,
       company: m.company || "Independent Broker",
       city: m.city || "Bangalore",
+      status: m.status || "active",
+      last_paid_fy: m.lastPaidFY || "2627",
+      payment_means: m.paymentMeans || null,
+      activation_note: m.activationNote || null,
       joined_date: m.joinedDate || new Date().toISOString().split("T")[0]
     }));
 
