@@ -2,6 +2,7 @@ import http from "http";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { generateMembershipCertificate } from "./lib/certificate.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1103,6 +1104,117 @@ const server = http.createServer((req, res) => {
     }));
   }
 
+  // API ROUTE 7: GET & POST /api/certificate (Dynamic Official CREA(I) Membership Certificate)
+  if (pathname === "/api/certificate") {
+    let memberName = "";
+    let companyName = "";
+    let isPreview = false;
+    let certId = "";
+
+    const data = readData();
+
+    if (req.method === "GET") {
+      const invoiceNo = parsedUrl.query.invoiceNo;
+      const memberId = parsedUrl.query.memberId;
+      const nameParam = parsedUrl.query.name;
+      const companyParam = parsedUrl.query.company;
+      isPreview = parsedUrl.query.preview === "true" || parsedUrl.query.preview === "1";
+
+      if (invoiceNo) {
+        certId = invoiceNo;
+        const payment = data.payments.find((p) => p.invoiceNo.toUpperCase() === invoiceNo.trim().toUpperCase());
+        if (payment) {
+          memberName = payment.payerName;
+          const mem = data.members.find((m) => m.id === payment.payerId || m.mobile === payment.payerMobile || m.name.toLowerCase() === payment.payerName.toLowerCase());
+          if (mem) {
+            companyName = mem.company || "";
+          }
+        }
+      }
+
+      if (!memberName && memberId) {
+        const mem = data.members.find((m) => m.id === memberId);
+        if (mem) {
+          memberName = mem.name;
+          companyName = mem.company || "";
+          certId = mem.id;
+        }
+      }
+
+      if (!memberName && nameParam) {
+        memberName = nameParam;
+        companyName = companyParam || "";
+      }
+    } else if (req.method === "POST") {
+      return readBody(async (err, body) => {
+        if (err) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({ success: false, error: "Invalid JSON" }));
+        }
+        memberName = body.memberName || "";
+        companyName = body.companyName || "";
+        certId = body.invoiceNo || body.certId || "";
+        isPreview = Boolean(body.preview);
+
+        if (!memberName && body.invoiceNo) {
+          const payment = data.payments.find((p) => p.invoiceNo.toUpperCase() === body.invoiceNo.trim().toUpperCase());
+          if (payment) {
+            memberName = payment.payerName;
+            const mem = data.members.find((m) => m.id === payment.payerId || m.mobile === payment.payerMobile || m.name.toLowerCase() === payment.payerName.toLowerCase());
+            if (mem) {
+              companyName = mem.company || "";
+            }
+          }
+        }
+
+        try {
+          if (!memberName) {
+            memberName = "Jatin Jain";
+            companyName = "J J Properties";
+          }
+          const pdfBytes = await generateMembershipCertificate({ memberName, companyName, certId });
+          const safeName = memberName.replace(/[^a-zA-Z0-9_-]/g, "_");
+          const filename = `CREA_Membership_Certificate_2026-27_${safeName}.pdf`;
+
+          res.writeHead(200, {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": isPreview ? `inline; filename="${filename}"` : `attachment; filename="${filename}"`,
+            "Content-Length": pdfBytes.length
+          });
+          return res.end(Buffer.from(pdfBytes));
+        } catch (e) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+      });
+    }
+
+    try {
+      if (!memberName) {
+        memberName = "Jatin Jain";
+        companyName = "J J Properties";
+      }
+      return (async () => {
+        const pdfBytes = await generateMembershipCertificate({ memberName, companyName, certId });
+        const safeName = memberName.replace(/[^a-zA-Z0-9_-]/g, "_");
+        const filename = `CREA_Membership_Certificate_2026-27_${safeName}.pdf`;
+
+        res.writeHead(200, {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": isPreview ? `inline; filename="${filename}"` : `attachment; filename="${filename}"`,
+          "Content-Length": pdfBytes.length
+        });
+        return res.end(Buffer.from(pdfBytes));
+      })().catch((e) => {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: false, error: e.message }));
+      });
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+  }
+
   // Serve Static index.html or files
   let filePath = path.join(__dirname, pathname === "/" ? "index.html" : pathname);
 
@@ -1132,7 +1244,9 @@ const server = http.createServer((req, res) => {
       ".json": "application/json",
       ".png": "image/png",
       ".jpg": "image/jpeg",
-      ".svg": "image/svg+xml"
+      ".svg": "image/svg+xml",
+      ".pdf": "application/pdf",
+      ".ttf": "font/ttf"
     };
 
     res.writeHead(200, { "Content-Type": mimeTypes[ext] || "application/octet-stream" });
