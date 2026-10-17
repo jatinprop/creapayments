@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { generateMembershipCertificate } from "./lib/certificate.js";
+import { fetchGstDetails } from "./lib/gst.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -975,6 +976,41 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ success: true, members: data.members }));
     });
+  }
+
+  // API ROUTE 4A-2: GET /api/gst or POST /api/gst (Auto-fetch GST details)
+  if (pathname === "/api/gst" || pathname.startsWith("/api/gst/")) {
+    const handleGstLookup = async (gstin) => {
+      try {
+        const data = readData();
+        const result = await fetchGstDetails(gstin, data.members || []);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify(result));
+      } catch (err) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    };
+
+    if (req.method === "GET") {
+      let gstin = parsedUrl.searchParams.get("gstin");
+      if (!gstin && pathname.startsWith("/api/gst/")) {
+        gstin = pathname.replace("/api/gst/", "").trim();
+      }
+      if (!gstin) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: false, error: "GSTIN query parameter is required." }));
+      }
+      return handleGstLookup(gstin);
+    } else if (req.method === "POST") {
+      return readBody((err, body) => {
+        if (err || !body || !body.gstin) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({ success: false, error: "GSTIN is required in request body." }));
+        }
+        return handleGstLookup(body.gstin);
+      });
+    }
   }
 
   // API ROUTE 4B: POST /api/member/status (Toggle Activate / Deactivate)

@@ -3886,11 +3886,17 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                 </div>
                 <div style="display: grid; grid-template-columns: 1.5fr 3fr auto; gap: 8px; align-items: flex-end;">
                   <div>
-                    <label class="form-label" style="font-size: 11px;">Member GSTIN (Optional)</label>
-                    <input type="text" id="add-mem-gstin" placeholder="29AAAAA0000A1Z5" maxlength="15" class="form-input" style="padding: 7px 10px; font-size: 12px; text-transform: uppercase;">
+                    <label class="form-label" style="font-size: 11px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+                      <span>Member GSTIN (Optional)</span>
+                      <span id="add-mem-gstin-status" style="font-size: 10px; font-weight: 500;"></span>
+                    </label>
+                    <div style="position: relative;">
+                      <input type="text" id="add-mem-gstin" placeholder="29AAAAA0000A1Z5" maxlength="15" class="form-input" style="padding: 7px 72px 7px 10px; font-size: 12px; text-transform: uppercase;" oninput="app.onGstInput(this.value, 'add')">
+                      <button type="button" onclick="app.fetchAndFillGst('add')" class="btn btn-sm" style="position: absolute; right: 3px; top: 3px; height: 26px; padding: 0 8px; font-size: 11px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; border-radius: 4px;" title="Auto-fetch Firm Name & Address from GSTIN">🔍 Fetch</button>
+                    </div>
                   </div>
                   <div>
-                    <label class="form-label" style="font-size: 11px;">Billing Address (For Tax Invoices)</label>
+                    <label class="form-label" style="font-size: 11px; margin-bottom: 3px;">Billing Address (For Tax Invoices)</label>
                     <input type="text" id="add-mem-address" placeholder="Suite 401, Prestige Meridian, MG Road, Bangalore 560001" class="form-input" style="padding: 7px 10px; font-size: 12px;">
                   </div>
                   <button onclick="app.addSingleMember()" class="btn btn-primary btn-sm" style="height: 34px; padding: 0 16px;">+ Add Member</button>
@@ -4047,8 +4053,14 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                 </div>
 
                 <div style="margin-bottom: 12px;">
-                  <label class="form-label" style="font-size: 11.5px;">Member GSTIN (Optional)</label>
-                  <input type="text" id="edit-mem-gstin" value="${this.escapeHtml(m.gstin || '')}" placeholder="29AAAAA0000A1Z5" maxlength="15" class="form-input" style="text-transform: uppercase;">
+                  <label class="form-label" style="font-size: 11.5px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+                    <span>Member GSTIN (Optional)</span>
+                    <span id="edit-mem-gstin-status" style="font-size: 10.5px; font-weight: 500;"></span>
+                  </label>
+                  <div style="position: relative;">
+                    <input type="text" id="edit-mem-gstin" value="${this.escapeHtml(m.gstin || '')}" placeholder="29AAAAA0000A1Z5" maxlength="15" class="form-input" style="padding-right: 75px; text-transform: uppercase;" oninput="app.onGstInput(this.value, 'edit')">
+                    <button type="button" onclick="app.fetchAndFillGst('edit')" class="btn btn-sm" style="position: absolute; right: 4px; top: 4px; height: 28px; padding: 0 8px; font-size: 11px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; border-radius: 4px;" title="Auto-fetch Firm Name & Address from GSTIN">🔍 Fetch</button>
+                  </div>
                 </div>
 
                 <div style="margin-bottom: 18px;">
@@ -4204,6 +4216,101 @@ Participants receive official CREA(I) accreditation credits, certified study mat
 
         this.openMembersModal();
         this.render();
+      },
+
+      // GSTIN Auto-fetch & autofill handler
+      _gstTimer: null,
+      onGstInput(val, mode = 'add') {
+        const clean = (val || '').trim().toUpperCase();
+        const statusEl = document.getElementById(`${mode}-mem-gstin-status`);
+        if (this._gstTimer) clearTimeout(this._gstTimer);
+
+        if (!clean) {
+          if (statusEl) statusEl.innerHTML = '';
+          return;
+        }
+
+        if (clean.length < 15) {
+          if (statusEl) {
+            statusEl.innerHTML = `<span style="color: var(--text-dim);">${clean.length}/15 chars</span>`;
+          }
+          return;
+        }
+
+        if (clean.length === 15) {
+          if (statusEl) {
+            statusEl.innerHTML = `<span style="color: #38bdf8;">Checking GSTIN...</span>`;
+          }
+          this._gstTimer = setTimeout(() => {
+            this.fetchAndFillGst(mode);
+          }, 350);
+        }
+      },
+
+      async fetchAndFillGst(mode = 'add') {
+        const gstinInput = document.getElementById(`${mode}-mem-gstin`);
+        const statusEl = document.getElementById(`${mode}-mem-gstin-status`);
+        const companyInput = document.getElementById(`${mode}-mem-company`);
+        const addressInput = document.getElementById(`${mode}-mem-address`);
+
+        if (!gstinInput) return;
+        const gstin = (gstinInput.value || '').trim().toUpperCase();
+
+        if (!gstin) {
+          if (statusEl) statusEl.innerHTML = '<span style="color: #f87171;">Enter 15-digit GSTIN</span>';
+          return;
+        }
+
+        if (statusEl) {
+          statusEl.innerHTML = '<span style="color: #38bdf8;">🔄 Fetching details...</span>';
+        }
+
+        try {
+          const res = await fetch(`/api/gst?gstin=${encodeURIComponent(gstin)}`);
+          const data = await res.json();
+
+          if (!data || !data.success) {
+            if (statusEl) {
+              statusEl.innerHTML = `<span style="color: #f87171;" title="${data?.error || ''}">⚠️ ${data?.error || 'Lookup failed'}</span>`;
+            }
+            return;
+          }
+
+          // Auto-fill firm / trade name if available
+          const fetchedCompany = data.company || data.tradeName || data.legalName;
+          if (fetchedCompany && companyInput) {
+            companyInput.value = fetchedCompany;
+            companyInput.style.transition = 'all 0.3s ease';
+            companyInput.style.borderColor = '#10b981';
+            companyInput.style.boxShadow = '0 0 10px rgba(16, 185, 129, 0.4)';
+            setTimeout(() => {
+              companyInput.style.boxShadow = 'none';
+            }, 1800);
+          }
+
+          // Auto-fill address
+          if (data.address && addressInput) {
+            addressInput.value = data.address;
+            addressInput.style.transition = 'all 0.3s ease';
+            addressInput.style.borderColor = '#10b981';
+            addressInput.style.boxShadow = '0 0 10px rgba(16, 185, 129, 0.4)';
+            setTimeout(() => {
+              addressInput.style.boxShadow = 'none';
+            }, 1800);
+          }
+
+          if (statusEl) {
+            if (data.partial) {
+              statusEl.innerHTML = `<span style="color: #fbbf24;">✓ ${data.state} (${data.entityType || 'Verified'})</span>`;
+            } else {
+              statusEl.innerHTML = `<span style="color: #34d399;" title="${data.tradeName || data.legalName}">✓ Auto-filled (${data.source === 'live_gsp' ? 'Live GST' : 'Directory'})</span>`;
+            }
+          }
+        } catch (err) {
+          if (statusEl) {
+            statusEl.innerHTML = `<span style="color: #f87171;">⚠️ Network error</span>`;
+          }
+        }
       },
 
       deleteMember(id) {

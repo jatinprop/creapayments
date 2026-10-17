@@ -8,6 +8,7 @@
     { "source": "/api/head/delete", "destination": "/api/head-delete" },
     { "source": "/api/member/status", "destination": "/api/members" },
     { "source": "/api/member/activate-manual", "destination": "/api/members" },
+    { "source": "/api/gst/(.*)", "destination": "/api/gst?gstin=$1" },
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
