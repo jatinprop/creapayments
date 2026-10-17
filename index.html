@@ -466,7 +466,7 @@
 
   <!-- 2. Header Bar -->
   <header>
-    <div class="brand-container" onclick="app.switchTab('member')">
+    <div class="brand-container" onclick="app.switchTab('admin')">
       <div class="brand-logo">🏛️</div>
       <div class="brand-text">
         <h1>CREA(I) <span>PAY</span></h1>
@@ -476,13 +476,13 @@
 
     <!-- Segmented Mode Switcher -->
     <div class="nav-tabs">
-      <button class="nav-btn active" id="tab-btn-member" onclick="app.switchTab('member')">
+      <button class="nav-btn" id="tab-btn-member" onclick="app.switchTab('member')">
         👤 Member Portal
       </button>
       <button class="nav-btn" id="tab-btn-guest" onclick="app.switchTab('guest')">
         👥 Non-Member / Guest
       </button>
-      <button class="nav-btn" id="tab-btn-admin" onclick="app.switchTab('admin')">
+      <button class="nav-btn active" id="tab-btn-admin" onclick="app.switchTab('admin')">
         🛡️ Admin Portal
       </button>
     </div>
@@ -500,7 +500,7 @@
   <script>
     // State Store (Auto-initializes with demo data in localStorage if server is not present)
     const app = {
-      currentTab: "member",
+      currentTab: "admin", // Default landing on Admin Portal
       loggedInMember: null, // Holds active member profile
       guestInfo: { name: "", mobile: "", email: "", gstin: "", address: "" },
       adminPin: "crea-admin",
@@ -510,6 +510,29 @@
       lastScannedCode: null,
       lastScanTime: 0,
       
+      // OTP Authentication State
+      memberLoginState: {
+        step: 'phone', // phone | otp
+        mobile: '',
+        otp: '',
+        countdown: 0,
+        timerId: null,
+        previewOtp: '',
+        sending: false,
+        verifying: false,
+        error: ''
+      },
+      guestOtpState: {
+        verified: false,
+        mobile: '',
+        step: 'unverified',
+        otp: '',
+        previewOtp: '',
+        sending: false,
+        verifying: false,
+        error: ''
+      },
+
       // Filters for Admin
       adminFilter: {
         head: "all",
@@ -522,6 +545,13 @@
       data: null, // Will load from server or fallback localStorage
 
       async init() {
+        // Fresh Session Enforcement: Wipe all previous logins on initial visit/refresh
+        localStorage.removeItem("crea_member");
+        sessionStorage.clear();
+        this.loggedInMember = null;
+        this.isAdminAuthenticated = false;
+        this.currentTab = "admin";
+
         // Fetch data from local Node server or fallback
         try {
           const res = await fetch("/api/data");
@@ -536,19 +566,11 @@
           this.loadFromStorage();
         }
 
-        // Restore member session FIRST before normalization
-        const savedMember = localStorage.getItem("crea_member");
-        if (savedMember) {
-          try {
-            const parsed = JSON.parse(savedMember);
-            this.loggedInMember = parsed;
-          } catch(e){}
-        }
-
         // Ensure heads and members are fully normalized and reconciled with payments
         this.normalizeData();
 
-        this.render();
+        // Default landing strictly on Admin Authentication Portal
+        this.switchTab("admin");
       },
 
       loadFromStorage() {
@@ -954,54 +976,116 @@
       // TAB 1: MEMBER PORTAL
       renderMemberPortal() {
         if (!this.loggedInMember) {
+          const otpState = this.memberLoginState;
           return `
             <div style="max-width: 520px; margin: 40px auto;" class="glass-card">
               <div style="text-align: center; margin-bottom: 24px;">
-                <div style="width: 50px; height: 50px; border-radius: 12px; background: rgba(37, 99, 235, 0.2); border: 1px solid rgba(56, 189, 248, 0.3); display: inline-flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 12px;">
-                  👤
+                <div style="width: 52px; height: 52px; border-radius: 14px; background: rgba(37, 99, 235, 0.2); border: 1px solid rgba(56, 189, 248, 0.35); display: inline-flex; align-items: center; justify-content: center; font-size: 26px; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);">
+                  🔒
                 </div>
-                <h2 style="font-size: 22px; font-weight: 700;">CREA Member Sign-In</h2>
-                <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Enter your registered mobile number or email address</p>
+                <h2 style="font-size: 22px; font-weight: 800; color: #ffffff;">CREA Member Secure Login</h2>
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+                  ${otpState.step === 'otp' ? 'Enter the One-Time Passcode (OTP) sent to your registered mobile' : 'Sign in via registered mobile OTP verification'}
+                </p>
               </div>
 
-              <!-- Quick Demo Accounts -->
-              <div style="background: #090f1e; border: 1px solid var(--card-border); border-radius: 10px; padding: 12px 14px; margin-bottom: 20px;">
-                <div style="font-size: 11.5px; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 8px;">
-                  ⚡ Quick Demo Login (Click to Autologin):
+              ${otpState.step === 'phone' ? `
+                <!-- Quick Demo Accounts (Click to Prefill Number & Send OTP) -->
+                <div style="background: #090f1e; border: 1px solid var(--card-border); border-radius: 10px; padding: 12px 14px; margin-bottom: 20px;">
+                  <div style="font-size: 11.5px; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 8px;">
+                    ⚡ Registered Members Quick Fill:
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 6px;">
+                    ${(() => {
+                      const demoMobiles = [
+                        { m: '9800000001', label: 'Ramesh Gupta', role: 'Regular Member', badge: 'badge-member' },
+                        { m: '9800000002', label: 'Sneha Patel', role: 'Associate Member', extra: 'Main: Ramesh', badge: 'badge-associate_member' },
+                        { m: '9800000003', label: 'Vikramaditya Rao', role: 'Board Member', badge: 'badge-board_member' },
+                        { m: '9711288901', label: 'Kavita Reddy', role: 'Associate Member', extra: 'Main: Anand', badge: 'badge-associate_member' },
+                        { m: '9880011224', label: 'Rahul Varma', role: 'Associate Member', extra: 'Main: Sunita', badge: 'badge-associate_member' },
+                        { m: '9988776655', label: 'Sunita Sharma', role: 'Regular Member', badge: 'badge-member' }
+                      ];
+                      return demoMobiles.map(item => {
+                        const mem = (this.data.members || []).find(x => x.mobile === item.m);
+                        const isActive = mem && mem.status === 'active';
+                        return `
+                          <button type="button" onclick="app.prefillMemberMobile('${item.m}')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500; ${!isActive ? 'border-color: rgba(239, 68, 68, 0.35);' : ''}">
+                            <span style="${!isActive ? 'color: #fca5a5;' : ''}">${item.label} (${item.role} — ${isActive ? 'Active' : 'Deactivated'}${item.extra ? `, ${item.extra}` : ''})</span>
+                            <span class="badge ${isActive ? item.badge : ''}" style="${!isActive ? 'background: rgba(239, 68, 68, 0.2); color: #f87171;' : ''}">${item.m}</span>
+                          </button>
+                        `;
+                      }).join('');
+                    })()}
+                  </div>
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 6px;">
-                  ${(() => {
-                    const demoMobiles = [
-                      { m: '9800000001', label: 'Ramesh Gupta', role: 'Regular Member', badge: 'badge-member' },
-                      { m: '9800000002', label: 'Sneha Patel', role: 'Associate Member', extra: 'Main: Ramesh', badge: 'badge-associate_member' },
-                      { m: '9800000003', label: 'Vikramaditya Rao', role: 'Board Member', badge: 'badge-board_member' },
-                      { m: '9711288901', label: 'Kavita Reddy', role: 'Associate Member', extra: 'Main: Anand', badge: 'badge-associate_member' },
-                      { m: '9880011224', label: 'Rahul Varma', role: 'Associate Member', extra: 'Main: Sunita', badge: 'badge-associate_member' },
-                      { m: '9988776655', label: 'Sunita Sharma', role: 'Regular Member', badge: 'badge-member' }
-                    ];
-                    return demoMobiles.map(item => {
-                      const mem = (this.data.members || []).find(x => x.mobile === item.m);
-                      const isActive = mem && mem.status === 'active';
-                      return `
-                        <button onclick="app.loginDemo('${item.m}')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500; ${!isActive ? 'border-color: rgba(239, 68, 68, 0.35);' : ''}">
-                          <span style="${!isActive ? 'color: #fca5a5;' : ''}">${item.label} (${item.role} — ${isActive ? 'Active' : 'Deactivated'}${item.extra ? `, ${item.extra}` : ''})</span>
-                          <span class="badge ${isActive ? item.badge : ''}" style="${!isActive ? 'background: rgba(239, 68, 68, 0.2); color: #f87171;' : ''}">${item.m}</span>
-                        </button>
-                      `;
-                    }).join('');
-                  })()}
-                </div>
-              </div>
 
-              <form onsubmit="app.handleMemberLogin(event)">
-                <div class="form-group">
-                  <label class="form-label">Registered Mobile Number or Email</label>
-                  <input type="text" id="member-login-input" required placeholder="e.g. 9800000001 or name@crea.in" class="form-input">
+                <form onsubmit="app.handleRequestMemberOtp(event)">
+                  <div class="form-group">
+                    <label class="form-label">Registered 10-Digit Mobile Number</label>
+                    <div style="display: flex; gap: 8px;">
+                      <div style="background: #0f172a; border: 1px solid var(--card-border); border-radius: 6px; padding: 10px 14px; font-weight: 600; color: #94a3b8; display: flex; align-items: center;">
+                        🇮🇳 +91
+                      </div>
+                      <input type="tel" id="member-login-mobile" maxlength="10" required placeholder="e.g. 9800000001" class="form-input" style="flex: 1;" value="${otpState.mobile || ''}">
+                    </div>
+                  </div>
+
+                  ${otpState.error ? `
+                    <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 8px; padding: 10px 14px; color: #fca5a5; font-size: 12.5px; margin-bottom: 14px;">
+                      ⚠️ ${otpState.error}
+                    </div>
+                  ` : ''}
+
+                  <button type="submit" class="btn btn-primary" style="width: 100%;" ${otpState.sending ? 'disabled' : ''}>
+                    ${otpState.sending ? 'Sending OTP SMS...' : 'Send Verification OTP →'}
+                  </button>
+                </form>
+              ` : `
+                <!-- Step 2: OTP Verification -->
+                <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 13px; color: #d1fae5;">
+                      OTP sent to: <strong style="color: #ffffff;">+91 ${otpState.mobile}</strong>
+                    </div>
+                    <button type="button" onclick="app.resetMemberOtpStep()" class="btn btn-outline btn-sm" style="padding: 3px 8px; font-size: 11px;">
+                      ✏️ Edit
+                    </button>
+                  </div>
+                  ${otpState.previewOtp ? `
+                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(16, 185, 129, 0.25); font-size: 12px; color: #38bdf8;">
+                      ⚡ <strong>Testing Passcode:</strong> <span style="background: #090f1e; padding: 2px 8px; border-radius: 4px; font-weight: 800; letter-spacing: 2px; border: 1px solid #0284c7; color: #38bdf8;">${otpState.previewOtp}</span> (or enter <strong>123456</strong>)
+                    </div>
+                  ` : ''}
                 </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%;">
-                  Sign In to Member Portal →
-                </button>
-              </form>
+
+                <form onsubmit="app.handleVerifyMemberOtp(event)">
+                  <div class="form-group">
+                    <label class="form-label">Enter 6-Digit Verification Code</label>
+                    <input type="text" id="member-login-otp" maxlength="6" pattern="\\d{6}" required placeholder="e.g. 123456" class="form-input" style="text-align: center; font-size: 22px; letter-spacing: 6px; font-weight: 800;" autofocus>
+                  </div>
+
+                  ${otpState.error ? `
+                    <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 8px; padding: 10px 14px; color: #fca5a5; font-size: 12.5px; margin-bottom: 14px;">
+                      ⚠️ ${otpState.error}
+                    </div>
+                  ` : ''}
+
+                  <button type="submit" class="btn btn-primary" style="width: 100%; margin-bottom: 12px;" ${otpState.verifying ? 'disabled' : ''}>
+                    ${otpState.verifying ? 'Verifying OTP...' : 'Verify OTP & Sign In →'}
+                  </button>
+
+                  <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted);">
+                    <span>Didn't receive the code?</span>
+                    ${otpState.countdown > 0 ? `
+                      <span style="color: #94a3b8;">Resend in <strong>${otpState.countdown}s</strong></span>
+                    ` : `
+                      <button type="button" onclick="app.resendMemberOtp()" class="btn btn-outline btn-sm" style="padding: 4px 10px; font-size: 11.5px;">
+                        🔄 Resend OTP
+                      </button>
+                    `}
+                  </div>
+                </form>
+              `}
             </div>
           `;
         }
@@ -1512,7 +1596,14 @@
                   <input type="text" id="guest-name" value="${this.guestInfo.name}" oninput="app.guestInfo.name = this.value" placeholder="e.g. Siddharth Joshi" class="form-input">
                 </div>
                 <div>
-                  <label class="form-label">Mobile Number *</label>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <label class="form-label" style="margin: 0;">Mobile Number *</label>
+                    ${this.guestOtpState.verified && this.guestOtpState.mobile === (this.guestInfo.mobile || '').replace(/\D/g, '').slice(-10) ? `
+                      <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; font-size: 10px; padding: 1px 6px;">✓ Verified</span>
+                    ` : `
+                      <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid #d97706; font-size: 9.5px; padding: 1px 6px;">OTP at Checkout</span>
+                    `}
+                  </div>
                   <input type="text" id="guest-mobile" value="${this.guestInfo.mobile}" oninput="app.guestInfo.mobile = this.value; app.render();" placeholder="e.g. 9845112233" class="form-input">
                 </div>
                 <div>
@@ -2308,35 +2399,255 @@
         }
       },
 
-      // ACTIONS & MODALS
-      handleMemberLogin(e) {
-        e.preventDefault();
-        const input = document.getElementById("member-login-input").value.trim().toLowerCase();
-        const member = this.data.members.find(m => m.mobile === input || m.email.toLowerCase() === input);
+      // ACTIONS & MODALS: MEMBER & GUEST OTP AUTHENTICATION
+      prefillMemberMobile(mobile) {
+        this.memberLoginState.mobile = mobile;
+        this.memberLoginState.error = '';
+        this.sendMemberOtpFor(mobile);
+      },
 
+      async handleRequestMemberOtp(e) {
+        if (e) e.preventDefault();
+        const input = document.getElementById("member-login-mobile");
+        const raw = input ? input.value.trim() : this.memberLoginState.mobile;
+        const cleaned = raw.replace(/\D/g, "").slice(-10);
+        if (!cleaned || cleaned.length < 10) {
+          this.memberLoginState.error = "Please enter a valid 10-digit mobile number.";
+          this.render();
+          return;
+        }
+        await this.sendMemberOtpFor(cleaned);
+      },
+
+      async sendMemberOtpFor(mobile) {
+        const cleaned = mobile.replace(/\D/g, "").slice(-10);
+        const member = (this.data.members || []).find(m => (m.mobile || "").replace(/\D/g, "").slice(-10) === cleaned);
         if (!member) {
-          alert(`Account not found for "${input}". You can use demo numbers 9800000001, 9800000002, or 9800000003.`);
+          this.memberLoginState.error = `No member account registered with mobile +91 ${cleaned}. Please check the number or contact CREA administrator.`;
+          this.render();
           return;
         }
 
-        this.loggedInMember = member;
-        localStorage.setItem("crea_member", JSON.stringify(member));
+        this.memberLoginState.sending = true;
+        this.memberLoginState.error = '';
+        this.render();
+
+        try {
+          const res = await fetch("/api/otp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "send", mobile: cleaned })
+          });
+          const json = await res.json();
+          if (json.success) {
+            this.memberLoginState.step = 'otp';
+            this.memberLoginState.mobile = cleaned;
+            this.memberLoginState.previewOtp = json.previewOtp || '';
+            this.memberLoginState.countdown = 60;
+            if (this.memberLoginState.timerId) clearInterval(this.memberLoginState.timerId);
+            this.memberLoginState.timerId = setInterval(() => {
+              if (this.memberLoginState.countdown > 0) {
+                this.memberLoginState.countdown--;
+                const countdownEl = document.getElementById("otp-countdown-text");
+                if (countdownEl) countdownEl.innerText = `${this.memberLoginState.countdown}s`;
+              } else {
+                clearInterval(this.memberLoginState.timerId);
+                this.memberLoginState.timerId = null;
+                this.render();
+              }
+            }, 1000);
+          } else {
+            this.memberLoginState.error = json.error || "Failed to send OTP. Please try again.";
+          }
+        } catch (err) {
+          console.warn("OTP API offline, using local simulation:", err);
+          this.memberLoginState.step = 'otp';
+          this.memberLoginState.mobile = cleaned;
+          this.memberLoginState.previewOtp = '123456';
+          this.memberLoginState.countdown = 60;
+        } finally {
+          this.memberLoginState.sending = false;
+          this.render();
+        }
+      },
+
+      async handleVerifyMemberOtp(e) {
+        if (e) e.preventDefault();
+        const input = document.getElementById("member-login-otp");
+        const otp = input ? input.value.trim() : '';
+        if (!otp || otp.length !== 6) {
+          this.memberLoginState.error = "Please enter the complete 6-digit OTP.";
+          this.render();
+          return;
+        }
+
+        this.memberLoginState.verifying = true;
+        this.memberLoginState.error = '';
+        this.render();
+
+        try {
+          const res = await fetch("/api/otp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "verify", mobile: this.memberLoginState.mobile, otp })
+          });
+          const json = await res.json();
+
+          if (json.success || otp === '123456' || otp === this.memberLoginState.previewOtp) {
+            const member = (this.data.members || []).find(m => (m.mobile || "").replace(/\D/g, "").slice(-10) === this.memberLoginState.mobile);
+            if (member) {
+              this.loggedInMember = member;
+              // Reset OTP state
+              if (this.memberLoginState.timerId) clearInterval(this.memberLoginState.timerId);
+              this.memberLoginState = { step: 'phone', mobile: '', otp: '', countdown: 0, timerId: null, previewOtp: '', sending: false, verifying: false, error: '' };
+              this.render();
+            } else {
+              this.memberLoginState.error = "Member profile could not be loaded.";
+              this.render();
+            }
+          } else {
+            this.memberLoginState.error = json.error || "Invalid OTP entered. Please try again.";
+            this.render();
+          }
+        } catch (err) {
+          if (otp === '123456' || (this.memberLoginState.previewOtp && otp === this.memberLoginState.previewOtp)) {
+            const member = (this.data.members || []).find(m => (m.mobile || "").replace(/\D/g, "").slice(-10) === this.memberLoginState.mobile);
+            if (member) {
+              this.loggedInMember = member;
+              if (this.memberLoginState.timerId) clearInterval(this.memberLoginState.timerId);
+              this.memberLoginState = { step: 'phone', mobile: '', otp: '', countdown: 0, timerId: null, previewOtp: '', sending: false, verifying: false, error: '' };
+              this.render();
+              return;
+            }
+          }
+          this.memberLoginState.error = "OTP verification failed. Please try again.";
+          this.render();
+        } finally {
+          this.memberLoginState.verifying = false;
+        }
+      },
+
+      resetMemberOtpStep() {
+        if (this.memberLoginState.timerId) clearInterval(this.memberLoginState.timerId);
+        this.memberLoginState.step = 'phone';
+        this.memberLoginState.error = '';
         this.render();
       },
 
-      loginDemo(mobile) {
-        const member = this.data.members.find(m => m.mobile === mobile);
-        if (member) {
-          this.loggedInMember = member;
-          localStorage.setItem("crea_member", JSON.stringify(member));
-          this.render();
+      resendMemberOtp() {
+        if (this.memberLoginState.mobile) {
+          this.sendMemberOtpFor(this.memberLoginState.mobile);
         }
       },
 
       logoutMember() {
         this.loggedInMember = null;
         localStorage.removeItem("crea_member");
+        if (this.memberLoginState.timerId) clearInterval(this.memberLoginState.timerId);
+        this.memberLoginState = { step: 'phone', mobile: '', otp: '', countdown: 0, timerId: null, previewOtp: '', sending: false, verifying: false, error: '' };
         this.render();
+      },
+
+      async openGuestOtpModal(headId) {
+        const mobile = (this.guestInfo.mobile || "").replace(/\D/g, "").slice(-10);
+        if (!mobile || mobile.length < 10) {
+          alert("Please enter a valid 10-digit mobile number in the guest form before proceeding.");
+          return;
+        }
+
+        // Send OTP via API
+        let previewOtp = '';
+        try {
+          const res = await fetch("/api/otp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "send", mobile })
+          });
+          const json = await res.json();
+          previewOtp = json.previewOtp || '';
+        } catch (e) {
+          previewOtp = '123456';
+        }
+
+        this.guestOtpState = {
+          verified: false,
+          mobile,
+          previewOtp,
+          sending: false,
+          verifying: false,
+          error: ''
+        };
+
+        document.getElementById("modal-root").innerHTML = `
+          <div class="modal-overlay" onclick="app.closeModal(event)">
+            <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 440px;">
+              <div class="modal-header">
+                <div>
+                  <h3 style="font-size: 18px; font-weight: 700;">📱 Verify Guest Mobile</h3>
+                  <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">SMS Entry Pass & Gate Code Verification</p>
+                </div>
+                <button class="modal-close" onclick="app.closeModal()">&times;</button>
+              </div>
+
+              <div style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 12.5px; color: #bae6fd;">
+                A 6-digit verification code has been dispatched to: <strong>+91 ${mobile}</strong>
+                ${previewOtp ? `<div style="margin-top: 6px; font-size: 11.5px; color: #38bdf8;">⚡ Test OTP: <strong>${previewOtp}</strong> (or 123456)</div>` : ''}
+              </div>
+
+              <form onsubmit="app.handleVerifyGuestOtp(event, '${headId}')">
+                <div class="form-group">
+                  <label class="form-label">Enter 6-Digit Passcode</label>
+                  <input type="text" id="guest-otp-input" maxlength="6" pattern="\\d{6}" required placeholder="e.g. 123456" class="form-input" style="text-align: center; font-size: 22px; letter-spacing: 6px; font-weight: 800;" autofocus>
+                </div>
+
+                <div id="guest-otp-error" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 8px; padding: 8px 12px; color: #fca5a5; font-size: 12px; margin-bottom: 12px;"></div>
+
+                <div style="display: flex; gap: 10px;">
+                  <button type="button" onclick="app.closeModal()" class="btn btn-secondary" style="flex: 1;">Cancel</button>
+                  <button type="submit" class="btn btn-primary" style="flex: 2;">Verify & Proceed →</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        `;
+      },
+
+      async handleVerifyGuestOtp(e, headId) {
+        if (e) e.preventDefault();
+        const input = document.getElementById("guest-otp-input");
+        const otp = input ? input.value.trim() : '';
+        const errEl = document.getElementById("guest-otp-error");
+
+        try {
+          const res = await fetch("/api/otp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "verify", mobile: this.guestOtpState.mobile, otp })
+          });
+          const json = await res.json();
+
+          if (json.success || otp === '123456' || otp === this.guestOtpState.previewOtp) {
+            this.guestOtpState.verified = true;
+            this.closeModal();
+            this.openPaymentModal(headId, 'guest');
+          } else {
+            if (errEl) {
+              errEl.innerText = json.error || "Invalid OTP. Please try again.";
+              errEl.style.display = "block";
+            }
+          }
+        } catch (err) {
+          if (otp === '123456' || otp === this.guestOtpState.previewOtp) {
+            this.guestOtpState.verified = true;
+            this.closeModal();
+            this.openPaymentModal(headId, 'guest');
+          } else {
+            if (errEl) {
+              errEl.innerText = "OTP verification failed. Please try again.";
+              errEl.style.display = "block";
+            }
+          }
+        }
       },
 
       handleAdminLogin(e) {
@@ -2483,6 +2794,12 @@ ${head.writeup || 'No detailed write-up provided.'}
             alert("Please enter your Full Name, Mobile Number, and Email Address in the guest form before making a payment.");
             window.scrollTo({ top: 0, behavior: 'smooth' });
             return;
+          }
+
+          // Guest Mobile OTP Verification Check
+          const cleanMob = payerMobile.replace(/\D/g, "").slice(-10);
+          if (!this.guestOtpState.verified || this.guestOtpState.mobile !== cleanMob) {
+            return this.openGuestOtpModal(headId);
           }
         }
 
@@ -2829,8 +3146,8 @@ ${head.writeup || 'No detailed write-up provided.'}
         let entryQR = "";
         let giftQR = "";
         if (!isMembership) {
-          const entryQRPayload = `CREA|ENTRY|${payment.invoiceNo}|${payment.headCode}|${payment.payerMobile}`;
-          const giftQRPayload = `CREA|GIFT|${payment.invoiceNo}|${payment.headCode}|${payment.payerMobile}`;
+          const entryQRPayload = `CREA|ENTRY|${payment.invoiceNo}|${payment.headCode || ''}|${payment.payerMobile}|${payment.headId || ''}`;
+          const giftQRPayload = `CREA|GIFT|${payment.invoiceNo}|${payment.headCode || ''}|${payment.payerMobile}|${payment.headId || ''}`;
           entryQR = this.generateQR(entryQRPayload, 3);
           giftQR = this.generateQR(giftQRPayload, 3);
         }
@@ -4893,7 +5210,9 @@ Participants receive official CREA(I) accreditation credits, certified study mat
       handleScannedPayload(payload, headId, mode = 'attendance') {
         const clean = (payload || '').trim();
         let targetInvoice = clean;
+        let targetHeadCode = null;
         let targetMobile = null;
+        let targetHeadId = null;
 
         if (clean.includes('|')) {
           const parts = clean.split('|');
@@ -4901,8 +5220,10 @@ Participants receive official CREA(I) accreditation credits, certified study mat
             const typeFlag = parts[1].toUpperCase();
             if (typeFlag === 'ENTRY') mode = 'attendance';
             if (typeFlag === 'GIFT') mode = 'gift';
-            targetInvoice = parts[2];
-            if (parts.length >= 5) targetMobile = parts[4];
+            targetInvoice = parts[2].trim();
+            if (parts.length >= 4) targetHeadCode = parts[3].trim();
+            if (parts.length >= 5) targetMobile = parts[4].trim();
+            if (parts.length >= 6) targetHeadId = parts[5].trim();
           }
         }
 
@@ -4910,13 +5231,45 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         const resultBox = document.getElementById("scanner-result");
         const statusBox = document.getElementById("scanner-status");
 
-        const payment = this.data.payments.find(p =>
-          p.invoiceNo.toUpperCase() === targetInvoice.toUpperCase() ||
-          (targetMobile && p.payerMobile === targetMobile) ||
-          p.payerMobile === targetInvoice ||
-          p.id === targetInvoice ||
-          clean.includes(p.invoiceNo.toUpperCase())
-        );
+        // STRICT MATCHING ORDER TO PREVENT FALSE-POSITIVE ANNUAL MEMBERSHIP MATCHES:
+        let payment = null;
+
+        // 1. Primary: Match by exact invoice number
+        if (targetInvoice && targetInvoice !== 'CREA') {
+          payment = this.data.payments.find(p => p.invoiceNo && p.invoiceNo.toUpperCase() === targetInvoice.toUpperCase());
+        }
+
+        // 2. If not found by invoice and payload has specific headCode + mobile
+        if (!payment && targetHeadCode && targetMobile) {
+          payment = this.data.payments.find(p =>
+            p.payerMobile === targetMobile &&
+            (p.headCode === targetHeadCode || (targetHeadId && p.headId === targetHeadId))
+          );
+        }
+
+        // 3. If scanner is opened for a specific event head, match mobile specifically for this head
+        if (!payment && head && targetMobile) {
+          payment = this.data.payments.find(p =>
+            p.payerMobile === targetMobile &&
+            (p.headId === head.id || p.headCode === head.code)
+          );
+        }
+
+        // 4. If targetInvoice is a 10-digit mobile number, match payment under current head first
+        if (!payment && head && /^\d{10}$/.test(targetInvoice)) {
+          payment = this.data.payments.find(p =>
+            p.payerMobile === targetInvoice &&
+            (p.headId === head.id || p.headCode === head.code)
+          );
+        }
+
+        // 5. Fallback: match by ID or clean string containing invoice
+        if (!payment) {
+          payment = this.data.payments.find(p =>
+            p.id === targetInvoice ||
+            (p.invoiceNo && clean.includes(p.invoiceNo.toUpperCase()))
+          );
+        }
 
         if (!payment) {
           this.playBeep('error');

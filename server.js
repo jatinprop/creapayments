@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { generateMembershipCertificate } from "./lib/certificate.js";
 import { fetchGstDetails } from "./lib/gst.js";
+import { sendOtp, verifyOtp } from "./lib/otp.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1011,6 +1012,49 @@ const server = http.createServer((req, res) => {
           return res.end(JSON.stringify({ success: false, error: "GSTIN is required in request body." }));
         }
         return handleGstLookup(body.gstin);
+      });
+    }
+  }
+
+  // API ROUTE 4A-3: OTP Dispatch and Verification (/api/otp, /api/otp/send, /api/otp/verify, /api/get-otp, /api/verify-otp)
+  if (pathname === "/api/otp" || pathname === "/api/otp/send" || pathname === "/api/otp/verify" || pathname === "/api/get-otp" || pathname === "/api/verify-otp") {
+    const handleOtpRequest = async (action, mobile, email, otp) => {
+      try {
+        if (action === "send" || pathname === "/api/otp/send" || pathname === "/api/get-otp") {
+          const resObj = await sendOtp({ mobile, email });
+          res.writeHead(200, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify(resObj));
+        } else if (action === "verify" || pathname === "/api/otp/verify" || pathname === "/api/verify-otp") {
+          const resObj = await verifyOtp({ mobile, email, otp });
+          res.writeHead(resObj.success ? 200 : 400, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify(resObj));
+        } else {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({ success: false, error: "Invalid OTP action." }));
+        }
+      } catch (err) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    };
+
+    if (req.method === "GET") {
+      const action = parsedUrl.searchParams.get("action") || (pathname.includes("verify") ? "verify" : "send");
+      const mobile = parsedUrl.searchParams.get("mobile") || parsedUrl.searchParams.get("number");
+      const email = parsedUrl.searchParams.get("email");
+      const otp = parsedUrl.searchParams.get("otp");
+      return handleOtpRequest(action, mobile, email, otp);
+    } else if (req.method === "POST") {
+      return readBody((err, body) => {
+        if (err) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({ success: false, error: "Invalid JSON" }));
+        }
+        const action = body.action || (pathname.includes("verify") || body.otp ? "verify" : "send");
+        const mobile = body.mobile || body.number;
+        const email = body.email;
+        const otp = body.otp;
+        return handleOtpRequest(action, mobile, email, otp);
       });
     }
   }
