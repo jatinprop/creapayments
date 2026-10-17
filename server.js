@@ -856,12 +856,26 @@ const server = http.createServer((req, res) => {
         return res.end(JSON.stringify({ success: false, error: "Invalid JSON" }));
       }
 
-      const { member, bulkText } = body;
+      const { action, member, bulkText } = body;
       const data = readData();
+
+      // Update existing member
+      if (action === "update_member" && member && member.id) {
+        data.members = data.members || [];
+        const idx = data.members.findIndex((m) => m.id === member.id);
+        if (idx !== -1) {
+          data.members[idx] = { ...data.members[idx], ...member };
+        } else {
+          data.members.push(member);
+        }
+        writeData(data);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: true, member }));
+      }
 
       if (member) {
         const newMem = {
-          id: `mem-${Date.now()}`,
+          id: member.id || `mem-${Date.now()}`,
           name: member.name.trim(),
           mobile: member.mobile.trim(),
           email: member.email.trim(),
@@ -871,7 +885,7 @@ const server = http.createServer((req, res) => {
           parentMemberMobile: member.parentMemberMobile || null,
           gstin: member.gstin ? member.gstin.trim().toUpperCase() : null,
           address: member.address ? member.address.trim() : null,
-          company: member.company || "Independent Broker",
+          company: (member.company || "").trim() || "CREA Member Brokerage",
           city: member.city || "Bangalore",
           status: member.status || "active",
           lastPaidFY: member.lastPaidFY || "2627",
@@ -1159,8 +1173,12 @@ const server = http.createServer((req, res) => {
         if (payment) {
           memberName = payment.payerName;
           const mem = data.members.find((m) => m.id === payment.payerId || m.mobile === payment.payerMobile || m.name.toLowerCase() === payment.payerName.toLowerCase());
-          if (mem) {
-            companyName = mem.company || "";
+          if (mem && mem.company && mem.company !== "Independent Realtor") {
+            companyName = mem.company;
+          } else if (payment.payerCompany && payment.payerCompany !== "Independent Realtor") {
+            companyName = payment.payerCompany;
+          } else if (mem && mem.company) {
+            companyName = mem.company;
           }
         }
       }
@@ -1169,14 +1187,18 @@ const server = http.createServer((req, res) => {
         const mem = data.members.find((m) => m.id === memberId);
         if (mem) {
           memberName = mem.name;
-          companyName = mem.company || "";
+          if (mem.company && mem.company !== "Independent Realtor") {
+            companyName = mem.company;
+          }
           certId = mem.id;
         }
       }
 
       if (!memberName && nameParam) {
         memberName = nameParam;
-        companyName = companyParam || "";
+      }
+      if (companyParam && companyParam.trim()) {
+        companyName = companyParam.trim();
       }
     } else if (req.method === "POST") {
       return readBody(async (err, body) => {
@@ -1194,8 +1216,14 @@ const server = http.createServer((req, res) => {
           if (payment) {
             memberName = payment.payerName;
             const mem = data.members.find((m) => m.id === payment.payerId || m.mobile === payment.payerMobile || m.name.toLowerCase() === payment.payerName.toLowerCase());
-            if (mem) {
-              companyName = mem.company || "";
+            if (!companyName) {
+              if (mem && mem.company && mem.company !== "Independent Realtor") {
+                companyName = mem.company;
+              } else if (payment.payerCompany && payment.payerCompany !== "Independent Realtor") {
+                companyName = payment.payerCompany;
+              } else if (mem && mem.company) {
+                companyName = mem.company;
+              }
             }
           }
         }
@@ -1203,6 +1231,8 @@ const server = http.createServer((req, res) => {
         try {
           if (!memberName) {
             memberName = "Jatin Jain";
+          }
+          if (!companyName || companyName === "Independent Realtor") {
             companyName = "J J Properties";
           }
           const pdfBytes = await generateMembershipCertificate({ memberName, companyName, certId });
@@ -1225,6 +1255,8 @@ const server = http.createServer((req, res) => {
     try {
       if (!memberName) {
         memberName = "Jatin Jain";
+      }
+      if (!companyName || companyName === "Independent Realtor") {
         companyName = "J J Properties";
       }
       return (async () => {

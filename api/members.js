@@ -29,12 +29,52 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, ...result });
     }
 
+    // 2B. Update existing member details (Company Name, contact, category, GSTIN, etc.)
+    if (action === "update_member" && member && member.id) {
+      const local = readLocalData();
+      local.members = local.members || [];
+      const idx = local.members.findIndex((m) => m.id === member.id);
+      if (idx !== -1) {
+        local.members[idx] = { ...local.members[idx], ...member };
+      } else {
+        local.members.push(member);
+      }
+      writeLocalData(local);
+
+      if (supabase) {
+        try {
+          await supabase.from("members").upsert({
+            id: member.id,
+            name: member.name,
+            mobile: member.mobile,
+            email: member.email,
+            category: member.category,
+            parent_member_id: member.parentMemberId || null,
+            parent_member_name: member.parentMemberName || null,
+            parent_member_mobile: member.parentMemberMobile || null,
+            gstin: member.gstin || null,
+            address: member.address || null,
+            company: member.company || "CREA Member Brokerage",
+            city: member.city || "Bangalore",
+            status: member.status || "active",
+            last_paid_fy: member.lastPaidFY || null,
+            payment_means: member.paymentMeans || null,
+            activation_note: member.activationNote || null,
+            joined_date: member.joinedDate || new Date().toISOString().split("T")[0]
+          });
+        } catch (err) {
+          console.warn("Supabase member update failed:", err.message);
+        }
+      }
+      return res.status(200).json({ success: true, member });
+    }
+
     // 3. Add individual or bulk members
     const newMembers = [];
 
     if (member) {
       newMembers.push({
-        id: `mem-${Date.now()}`,
+        id: member.id || `mem-${Date.now()}`,
         name: (member.name || "Member").trim(),
         mobile: (member.mobile || "").trim(),
         email: (member.email || "").trim(),
@@ -44,7 +84,7 @@ export default async function handler(req, res) {
         parentMemberMobile: member.parentMemberMobile || null,
         gstin: member.gstin ? member.gstin.trim().toUpperCase() : null,
         address: member.address ? member.address.trim() : null,
-        company: member.company || "Independent Broker",
+        company: (member.company || "").trim() || "CREA Member Brokerage",
         city: member.city || "Bangalore",
         status: member.status || "active",
         lastPaidFY: member.lastPaidFY || "2627",

@@ -2019,7 +2019,7 @@ ${head.writeup || 'No detailed write-up provided.'}
           return;
         }
 
-        let payerName, payerMobile, payerEmail, payerCategory, payerType, payerId, payerGstin, payerAddress;
+        let payerName, payerMobile, payerEmail, payerCategory, payerType, payerId, payerGstin, payerAddress, payerCompany;
 
         const isMember = mode === "member" || (!mode && Boolean(this.loggedInMember));
         if (isMember) {
@@ -2035,6 +2035,7 @@ ${head.writeup || 'No detailed write-up provided.'}
           payerId = this.loggedInMember.id;
           payerGstin = this.loggedInMember.gstin || "";
           payerAddress = this.loggedInMember.address || "";
+          payerCompany = this.loggedInMember.company || "";
         } else {
           // Guest Mode
           payerName = this.guestInfo.name.trim();
@@ -2042,6 +2043,7 @@ ${head.writeup || 'No detailed write-up provided.'}
           payerEmail = this.guestInfo.email.trim();
           payerGstin = (this.guestInfo.gstin || "").trim();
           payerAddress = (this.guestInfo.address || "").trim();
+          payerCompany = (this.guestInfo.company || "").trim();
           payerCategory = "non_member";
           payerType = "non_member";
           payerId = null;
@@ -2082,6 +2084,12 @@ ${head.writeup || 'No detailed write-up provided.'}
                   <span style="color: var(--text-muted);">Payer:</span>
                   <strong>${payerName} (${payerCategory.replace('_', ' ').toUpperCase()})</strong>
                 </div>
+                ${payerCompany ? `
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: var(--text-muted);">Company / Firm:</span>
+                    <strong style="color: #fbbf24;">${payerCompany}</strong>
+                  </div>
+                ` : ''}
                 <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                   <span style="color: var(--text-muted);">Contact:</span>
                   <span>+91 ${payerMobile} • ${payerEmail}</span>
@@ -2129,7 +2137,7 @@ ${head.writeup || 'No detailed write-up provided.'}
 
               <div style="display: flex; gap: 10px;">
                 <button onclick="app.closeModal()" class="btn btn-secondary" style="flex: 1;">Cancel</button>
-                <button onclick="app.executePayment('${head.id}', '${payerType}', '${payerCategory}', '${payerId}', '${payerName}', '${payerMobile}', '${payerEmail}', '${app.escapeHtml(payerGstin)}', '${app.escapeHtml(payerAddress)}')" class="btn btn-success" style="flex: 2;">
+                <button onclick="app.executePayment('${head.id}', '${payerType}', '${payerCategory}', '${payerId}', '${app.escapeHtml(payerName)}', '${payerMobile}', '${payerEmail}', '${app.escapeHtml(payerGstin)}', '${app.escapeHtml(payerAddress)}', '${app.escapeHtml(payerCompany)}')" class="btn btn-success" style="flex: 2;">
                   ✓ Confirm & Complete Payment (₹${totalAmount.toLocaleString('en-IN')})
                 </button>
               </div>
@@ -2138,7 +2146,7 @@ ${head.writeup || 'No detailed write-up provided.'}
         `;
       },
 
-      async executePayment(headId, payerType, payerCategory, payerId, payerName, payerMobile, payerEmail, payerGstin = "", payerAddress = "") {
+      async executePayment(headId, payerType, payerCategory, payerId, payerName, payerMobile, payerEmail, payerGstin = "", payerAddress = "", payerCompany = "") {
         const head = this.data.heads.find(h => h.id === headId);
         if (!head) return;
 
@@ -2170,7 +2178,7 @@ ${head.writeup || 'No detailed write-up provided.'}
           const res = await fetch("/api/payment", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ headId, payerType, payerCategory, payerId, payerName, payerMobile, payerEmail, payerGstin, payerAddress })
+            body: JSON.stringify({ headId, payerType, payerCategory, payerId, payerName, payerMobile, payerEmail, payerGstin, payerAddress, payerCompany })
           });
           if (res.ok) {
             const result = await res.json();
@@ -2204,6 +2212,7 @@ ${head.writeup || 'No detailed write-up provided.'}
           payerName,
           payerMobile,
           payerEmail,
+          payerCompany: payerCompany || "",
           payerGstin: payerGstin || "",
           payerAddress: payerAddress || "",
           baseAmount: base,
@@ -2241,6 +2250,9 @@ ${head.writeup || 'No detailed write-up provided.'}
             mem.paymentMeans = "Online Gateway";
             mem.activationNote = (mem.category === 'associate_member') ? `Associate Fee Paid (Invoice ${invoiceNo})` : `Paid Online (Invoice ${invoiceNo})`;
             mem.deactivationReason = null;
+            if (payerCompany && (!mem.company || mem.company === "Independent Realtor" || mem.company === "CREA Member Brokerage")) {
+              mem.company = payerCompany;
+            }
           }
           this.normalizeData();
         }
@@ -2551,9 +2563,20 @@ ${head.writeup || 'No detailed write-up provided.'}
         }
 
         const memberName = payment ? payment.payerName : (member ? member.name : "Jatin Jain");
-        const companyName = (member && member.company) ? member.company : "J J Properties";
+        let companyName = "";
+        if (member && member.company && member.company !== "Independent Realtor") {
+          companyName = member.company;
+        } else if (payment && payment.payerCompany && payment.payerCompany !== "Independent Realtor") {
+          companyName = payment.payerCompany;
+        } else if (member && member.company) {
+          companyName = member.company;
+        } else {
+          companyName = "J J Properties";
+        }
+
         const certId = payment ? payment.invoiceNo : (member ? member.id : "CREA/2627/MEM/0001");
-        const firmFormatted = companyName.toLowerCase().startsWith('m/s') ? companyName : `M/s. ${companyName}`;
+        const cleanFirm = companyName.replace(/^m\/s\.?\s*/i, '').trim();
+        const firmFormatted = cleanFirm ? `M/s. ${cleanFirm}` : 'M/s. CREA Accredited Brokerage';
 
         const pdfDownloadUrl = `/api/certificate?invoiceNo=${payment ? encodeURIComponent(payment.invoiceNo) : ''}&memberId=${member ? encodeURIComponent(member.id) : ''}&name=${encodeURIComponent(memberName)}&company=${encodeURIComponent(companyName)}`;
 
@@ -2572,6 +2595,20 @@ ${head.writeup || 'No detailed write-up provided.'}
                     📥 Download Vector PDF
                   </a>
                   <button class="modal-close" onclick="app.closeModal()">&times;</button>
+                </div>
+              </div>
+
+              <!-- Live Firm Name Editor Bar -->
+              <div style="background: #090f1e; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;" class="no-print">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <span style="font-size: 12px; font-weight: 700; color: #38bdf8;">🏢 Firm / Company Name:</span>
+                  <input type="text" id="cert-company-live-input" value="${this.escapeHtml(companyName)}" placeholder="e.g. Apex Prime Realty" class="form-input" style="padding: 5px 10px; font-size: 12px; width: 260px; height: 32px;">
+                  <button onclick="app.updateCertificateFirmName('${invoiceNo || ''}', '${member ? member.id : ''}')" class="btn btn-secondary btn-sm" style="height: 32px; padding: 0 12px; color: #fbbf24; border-color: rgba(251, 191, 36, 0.5); font-weight: 600;">
+                    💾 Save Firm to Certificate
+                  </button>
+                </div>
+                <div style="font-size: 11.5px; color: var(--text-muted);">
+                  Prints on Certificate as: <strong style="color: #fbbf24;">(${firmFormatted})</strong>
                 </div>
               </div>
 
@@ -2695,6 +2732,47 @@ ${head.writeup || 'No detailed write-up provided.'}
         `;
       },
 
+      async updateCertificateFirmName(invoiceNo, memberId) {
+        const input = document.getElementById("cert-company-live-input");
+        if (!input) return;
+        const newCompany = input.value.trim();
+        if (!newCompany) {
+          alert("Please enter a valid Company / Firm Name.");
+          return;
+        }
+
+        let member = memberId ? this.data.members.find(m => m.id === memberId) : null;
+        let payment = invoiceNo ? this.data.payments.find(p => p.invoiceNo === invoiceNo) : null;
+
+        if (!member && payment) {
+          member = this.data.members.find(m => m.id === payment.payerId || m.mobile === payment.payerMobile || m.name.toLowerCase() === payment.payerName.toLowerCase());
+        }
+
+        if (member) {
+          member.company = newCompany;
+          try {
+            await fetch("/api/members", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "update_member", member })
+            });
+          } catch(e) {}
+        }
+
+        if (payment) {
+          payment.payerCompany = newCompany;
+        }
+
+        if (this.loggedInMember && member && this.loggedInMember.id === member.id) {
+          this.loggedInMember.company = newCompany;
+        }
+
+        this.normalizeData();
+        this.saveToStorage();
+        this.render();
+        this.openCertificateModal(invoiceNo, memberId || (member ? member.id : null));
+      },
+
       async downloadCertificateOffline(memberName, companyName) {
         if (!window.PDFLib) {
           window.location.href = `/api/certificate?name=${encodeURIComponent(memberName)}&company=${encodeURIComponent(companyName)}`;
@@ -2708,7 +2786,8 @@ ${head.writeup || 'No detailed write-up provided.'}
           const boldFont = await pdfDoc.embedFont(PDFLib.StandardFonts.TimesRomanBold);
           const page = pdfDoc.getPage(0);
           page.drawText(memberName, { x: 350, y: 304, size: 28, font: font, color: PDFLib.rgb(0.1, 0.1, 0.1) });
-          const firmText = '(' + (companyName.toLowerCase().startsWith('m/s') ? companyName : 'M/s. ' + companyName) + ')';
+          const cleanFirm = (companyName || "").replace(/^m\/s\.?\s*/i, '').trim();
+          const firmText = '(' + (cleanFirm ? 'M/s. ' + cleanFirm : 'M/s. CREA Accredited Brokerage') + ')';
           page.drawText(firmText, { x: 570, y: 302, size: 13, font: boldFont, color: PDFLib.rgb(0.12, 0.12, 0.12) });
           const pdfBytes = await pdfDoc.save();
           const blob = new Blob([pdfBytes], { type: "application/pdf" });
@@ -3443,12 +3522,16 @@ Participants receive official CREA(I) accreditation credits, certified study mat
               <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 10px; padding: 14px; margin-bottom: 20px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                   <div style="font-size: 13px; font-weight: 700; color: #38bdf8;">+ Quick Add Member to CREA Directory:</div>
-                  <div style="font-size: 11px; color: var(--text-muted);">Associate members get discounted fees but inherit main member's active standing</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">Company / Firm name will appear on official membership certificates as M/s. [Company Name]</div>
                 </div>
-                <div style="display: grid; grid-template-columns: 1.5fr 1.2fr 1.5fr 1.2fr 1.6fr; gap: 8px; margin-bottom: 8px;">
+                <div style="display: grid; grid-template-columns: 1.4fr 1.6fr 1.1fr 1.4fr 1.2fr; gap: 8px; margin-bottom: 8px;">
                   <div>
                     <label class="form-label" style="font-size: 11px;">Name *</label>
                     <input type="text" id="add-mem-name" placeholder="Vikram Singhania" class="form-input" style="padding: 7px 10px; font-size: 12px;">
+                  </div>
+                  <div>
+                    <label class="form-label" style="font-size: 11px; color: #fbbf24;">Company / Firm Name *</label>
+                    <input type="text" id="add-mem-company" placeholder="e.g. Singhania Estates" class="form-input" style="padding: 7px 10px; font-size: 12px; border-color: rgba(251, 191, 36, 0.4);">
                   </div>
                   <div>
                     <label class="form-label" style="font-size: 11px;">Mobile *</label>
@@ -3466,13 +3549,13 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                       <option value="board_member">Board Member</option>
                     </select>
                   </div>
-                  <div id="add-mem-parent-wrap" style="display: none;">
-                    <label class="form-label" style="font-size: 11px; color: #f59e0b;">Linked Main Member *</label>
-                    <select id="add-mem-parent" class="form-select" style="padding: 7px 10px; font-size: 12px; border-color: rgba(245, 158, 11, 0.4);">
-                      <option value="">-- Select Main Member --</option>
-                      ${primaryMembers.map(pm => `<option value="${pm.id}">${pm.name} (${pm.mobile})</option>`).join('')}
-                    </select>
-                  </div>
+                </div>
+                <div id="add-mem-parent-wrap" style="display: none; margin-bottom: 8px;">
+                  <label class="form-label" style="font-size: 11px; color: #f59e0b;">Linked Main Member * (Associate member gets discounted fees but active standing inherits main member)</label>
+                  <select id="add-mem-parent" class="form-select" style="padding: 7px 10px; font-size: 12px; border-color: rgba(245, 158, 11, 0.4); max-width: 420px;">
+                    <option value="">-- Select Main Member --</option>
+                    ${primaryMembers.map(pm => `<option value="${pm.id}">${pm.name} (${pm.mobile}) - ${pm.company || 'Brokerage'}</option>`).join('')}
+                  </select>
                 </div>
                 <div style="display: grid; grid-template-columns: 1.5fr 3fr auto; gap: 8px; align-items: flex-end;">
                   <div>
@@ -3504,7 +3587,8 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                       <tr>
                         <td>
                           <strong>${m.name}</strong>
-                          <div style="font-size: 11px; color: var(--text-dim);">${m.company || 'Brokerage'} • ${m.city || 'Bangalore'}</div>
+                          <div style="font-size: 11px; color: #fbbf24; font-weight: 600;">🏢 ${m.company || 'CREA Member Brokerage'}</div>
+                          <div style="font-size: 10.5px; color: var(--text-dim);">${m.city || 'Bangalore'}</div>
                           ${m.address ? `<div style="font-size: 10px; color: var(--text-muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${m.address}">${m.address}</div>` : ''}
                         </td>
                         <td>
@@ -3539,8 +3623,10 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                           <div style="display: flex; gap: 4px; align-items: center;">
                             ${m.status === 'active' ? `
                               <button onclick="app.openCertificateModal(null, '${m.id}')" class="btn btn-secondary btn-sm" style="color: #fbbf24; border-color: rgba(251, 191, 36, 0.4); padding: 3px 6px; font-size: 11px;" title="View & Download Official CREA Membership Certificate for ${m.name}">🎓</button>
+                              <button onclick="app.openEditMemberModal('${m.id}')" class="btn btn-secondary btn-sm" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.4); padding: 3px 7px; font-size: 11px;" title="Edit Member & Company Details">✏️ Edit</button>
                               <button onclick="app.toggleMemberStatus('${m.id}', 'deactivated')" class="btn btn-secondary btn-sm" style="color: #f87171; padding: 3px 8px; font-size: 11px;" title="Deactivate Member">⏸ Deactivate</button>
                             ` : `
+                              <button onclick="app.openEditMemberModal('${m.id}')" class="btn btn-secondary btn-sm" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.4); padding: 3px 7px; font-size: 11px;" title="Edit Member & Company Details">✏️ Edit</button>
                               <button onclick="app.openManualActivationModal('${m.id}')" class="btn btn-primary btn-sm" style="padding: 3px 8px; font-size: 11px; background: #059669; border-color: #10b981;" title="Activate Member with Payment Record">✓ Activate</button>
                             `}
                             <button onclick="app.deleteMember('${m.id}')" class="btn btn-secondary btn-sm" style="color: var(--text-dim); padding: 3px 6px;" title="Remove Member">🗑️</button>
@@ -3563,8 +3649,165 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         `;
       },
 
+      openEditMemberModal(memberId) {
+        const m = this.data.members.find(mem => mem.id === memberId);
+        if (!m) return;
+
+        const primaryMembers = this.data.members.filter(x => x.id !== m.id && x.category !== 'associate_member');
+
+        document.getElementById("modal-root").innerHTML = `
+          <div class="modal-overlay" onclick="app.closeModal(event)">
+            <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 600px;">
+              <div class="modal-header">
+                <div>
+                  <h3 style="font-size: 18px; font-weight: 700;">Edit Member & Company Profile</h3>
+                  <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Company/Firm name appears on all official membership certificates as M/s. [Company Name]</p>
+                </div>
+                <button class="modal-close" onclick="app.openMembersModal()">&times;</button>
+              </div>
+
+              <form onsubmit="app.saveEditMember(event, '${m.id}')">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                  <div>
+                    <label class="form-label" style="font-size: 11.5px;">Member Name *</label>
+                    <input type="text" id="edit-mem-name" value="${this.escapeHtml(m.name)}" required class="form-input">
+                  </div>
+                  <div>
+                    <label class="form-label" style="font-size: 11.5px; color: #fbbf24;">Company / Firm Name *</label>
+                    <input type="text" id="edit-mem-company" value="${this.escapeHtml(m.company || '')}" placeholder="e.g. Apex Prime Realty" required class="form-input" style="border-color: rgba(251, 191, 36, 0.4);">
+                  </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                  <div>
+                    <label class="form-label" style="font-size: 11.5px;">Mobile Number *</label>
+                    <input type="text" id="edit-mem-mobile" value="${this.escapeHtml(m.mobile)}" required class="form-input">
+                  </div>
+                  <div>
+                    <label class="form-label" style="font-size: 11.5px;">Email Address *</label>
+                    <input type="email" id="edit-mem-email" value="${this.escapeHtml(m.email)}" required class="form-input">
+                  </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                  <div>
+                    <label class="form-label" style="font-size: 11.5px;">Member Category</label>
+                    <select id="edit-mem-cat" class="form-select" onchange="document.getElementById('edit-mem-parent-wrap').style.display = this.value === 'associate_member' ? 'block' : 'none'">
+                      <option value="member" ${m.category === 'member' ? 'selected' : ''}>Regular Member</option>
+                      <option value="associate_member" ${m.category === 'associate_member' ? 'selected' : ''}>Associate Member</option>
+                      <option value="board_member" ${m.category === 'board_member' ? 'selected' : ''}>Board Member</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="form-label" style="font-size: 11.5px;">Membership Status</label>
+                    <select id="edit-mem-status" class="form-select">
+                      <option value="active" ${m.status === 'active' ? 'selected' : ''}>Active</option>
+                      <option value="deactivated" ${m.status === 'deactivated' ? 'selected' : ''}>Deactivated</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div id="edit-mem-parent-wrap" style="display: ${m.category === 'associate_member' ? 'block' : 'none'}; margin-bottom: 12px;">
+                  <label class="form-label" style="font-size: 11.5px; color: #f59e0b;">Linked Main Member</label>
+                  <select id="edit-mem-parent" class="form-select" style="border-color: rgba(245, 158, 11, 0.4);">
+                    <option value="">-- Select Main Member --</option>
+                    ${primaryMembers.map(pm => `<option value="${pm.id}" ${pm.id === m.parentMemberId ? 'selected' : ''}>${pm.name} (${pm.mobile}) - ${pm.company || 'Brokerage'}</option>`).join('')}
+                  </select>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                  <label class="form-label" style="font-size: 11.5px;">Member GSTIN (Optional)</label>
+                  <input type="text" id="edit-mem-gstin" value="${this.escapeHtml(m.gstin || '')}" placeholder="29AAAAA0000A1Z5" maxlength="15" class="form-input" style="text-transform: uppercase;">
+                </div>
+
+                <div style="margin-bottom: 18px;">
+                  <label class="form-label" style="font-size: 11.5px;">Billing Address (For Tax Invoices)</label>
+                  <input type="text" id="edit-mem-address" value="${this.escapeHtml(m.address || '')}" placeholder="Suite 401, MG Road, Bangalore 560001" class="form-input">
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                  <button type="button" onclick="app.openMembersModal()" class="btn btn-secondary">Cancel</button>
+                  <button type="submit" class="btn btn-primary" style="background: #2563eb; border-color: #3b82f6;">💾 Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        `;
+      },
+
+      async saveEditMember(e, memberId) {
+        if (e && e.preventDefault) e.preventDefault();
+        const m = this.data.members.find(mem => mem.id === memberId);
+        if (!m) return;
+
+        const name = document.getElementById("edit-mem-name").value.trim();
+        const company = document.getElementById("edit-mem-company").value.trim();
+        const mobile = document.getElementById("edit-mem-mobile").value.trim();
+        const email = document.getElementById("edit-mem-email").value.trim();
+        const category = document.getElementById("edit-mem-cat").value;
+        const status = document.getElementById("edit-mem-status").value;
+        const gstin = (document.getElementById("edit-mem-gstin").value || "").trim().toUpperCase();
+        const address = (document.getElementById("edit-mem-address").value || "").trim();
+
+        if (!name || !mobile) {
+          alert("Name and mobile are mandatory.");
+          return;
+        }
+
+        m.name = name;
+        m.company = company || "CREA Member Brokerage";
+        m.mobile = mobile;
+        m.email = email;
+        m.category = category;
+        m.status = status;
+        m.gstin = gstin || null;
+        m.address = address || null;
+
+        if (category === "associate_member") {
+          const parentSel = document.getElementById("edit-mem-parent");
+          const parentId = parentSel ? parentSel.value : null;
+          m.parentMemberId = parentId;
+          const parentObj = this.data.members.find(x => x.id === parentId);
+          if (parentObj) {
+            m.parentMemberName = parentObj.name;
+            m.parentMemberMobile = parentObj.mobile;
+          }
+        } else {
+          m.parentMemberId = null;
+          m.parentMemberName = null;
+          m.parentMemberMobile = null;
+        }
+
+        // Sync loggedInMember session if this member is currently logged in
+        if (this.loggedInMember && this.loggedInMember.id === m.id) {
+          this.loggedInMember = { ...m };
+        }
+
+        // Sync any past payments for this member to have the updated company name
+        (this.data.payments || []).forEach(p => {
+          if (p.payerId === m.id || p.payerMobile === m.mobile) {
+            p.payerCompany = m.company;
+          }
+        });
+
+        this.normalizeData();
+        this.saveToStorage();
+
+        try {
+          await fetch("/api/members", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "update_member", member: m })
+          });
+        } catch(err) {}
+
+        this.openMembersModal();
+        this.render();
+      },
+
       addSingleMember() {
         const name = document.getElementById("add-mem-name").value.trim();
+        const company = (document.getElementById("add-mem-company").value || "").trim();
         const mobile = document.getElementById("add-mem-mobile").value.trim();
         const email = document.getElementById("add-mem-email").value.trim();
         const category = document.getElementById("add-mem-cat").value;
@@ -3606,7 +3849,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
           parentMemberMobile,
           gstin: gstin || null,
           address: address || null,
-          company: "Independent Realtor",
+          company: company || "CREA Member Brokerage",
           city: "Bangalore",
           status: "active",
           lastPaidFY: currentFY.code,

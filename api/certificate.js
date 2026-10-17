@@ -36,8 +36,12 @@ export default async function handler(req, res) {
           const mem = (data.members || []).find((m) =>
             m.id === payment.payerId || m.mobile === payment.payerMobile || m.name.toLowerCase() === payment.payerName.toLowerCase()
           );
-          if (mem) {
-            companyName = mem.company || "";
+          if (mem && mem.company && mem.company !== "Independent Realtor") {
+            companyName = mem.company;
+          } else if (payment.payerCompany && payment.payerCompany !== "Independent Realtor") {
+            companyName = payment.payerCompany;
+          } else if (mem && mem.company) {
+            companyName = mem.company;
           }
         }
       }
@@ -46,14 +50,18 @@ export default async function handler(req, res) {
         const mem = (data.members || []).find((m) => m.id === memberId);
         if (mem) {
           memberName = mem.name;
-          companyName = mem.company || "";
+          if (mem.company && mem.company !== "Independent Realtor") {
+            companyName = mem.company;
+          }
           certId = mem.id;
         }
       }
 
       if (!memberName && nameParam) {
         memberName = nameParam;
-        companyName = companyParam || "";
+      }
+      if (companyParam && companyParam.trim()) {
+        companyName = companyParam.trim();
       }
     } else if (req.method === "POST") {
       const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
@@ -71,8 +79,14 @@ export default async function handler(req, res) {
           const mem = (data.members || []).find((m) =>
             m.id === payment.payerId || m.mobile === payment.payerMobile || m.name.toLowerCase() === payment.payerName.toLowerCase()
           );
-          if (mem) {
-            companyName = mem.company || "";
+          if (!companyName) {
+            if (mem && mem.company && mem.company !== "Independent Realtor") {
+              companyName = mem.company;
+            } else if (payment.payerCompany && payment.payerCompany !== "Independent Realtor") {
+              companyName = payment.payerCompany;
+            } else if (mem && mem.company) {
+              companyName = mem.company;
+            }
           }
         }
       }
@@ -80,6 +94,8 @@ export default async function handler(req, res) {
 
     if (!memberName) {
       memberName = "Jatin Jain";
+    }
+    if (!companyName || companyName === "Independent Realtor") {
       companyName = "J J Properties";
     }
 
