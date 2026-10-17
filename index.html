@@ -1038,7 +1038,7 @@
 
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                           <button onclick="app.viewInvoice('${p.invoiceNo}')" class="btn btn-success btn-sm" style="flex: 1.4; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
-                            <span>✓</span> <span>Tax Invoice & QR Passes</span>
+                            <span>✓</span> <span>${isMem ? 'Tax Invoice' : 'Tax Invoice & QR Passes'}</span>
                           </button>
 
                           ${isMem ? `
@@ -2218,7 +2218,7 @@ ${head.writeup || 'No detailed write-up provided.'}
                   </button>
                 ` : ''}
                 <button onclick="app.viewInvoice('${payment.invoiceNo}')" class="btn btn-secondary">
-                  🖨️ View Tax Invoice (with 2 QR Codes)
+                  🖨️ ${(payment.headCode === 'MEM' || (payment.headTitle && payment.headTitle.toLowerCase().includes('membership'))) ? 'View Tax Invoice' : 'View Tax Invoice (with 2 QR Passes)'}
                 </button>
                 <button onclick="app.closeModal(); app.render();" class="btn btn-outline">
                   Back to Portal
@@ -2236,10 +2236,16 @@ ${head.writeup || 'No detailed write-up provided.'}
         const head = this.data.heads.find(h => h.id === payment.headId || h.code === payment.headCode);
         const member = this.data.members.find(m => m.id === payment.payerId || m.mobile === payment.payerMobile);
 
-        const entryQRPayload = `CREA|ENTRY|${payment.invoiceNo}|${payment.headCode}|${payment.payerMobile}`;
-        const giftQRPayload = `CREA|GIFT|${payment.invoiceNo}|${payment.headCode}|${payment.payerMobile}`;
-        const entryQR = this.generateQR(entryQRPayload, 3);
-        const giftQR = this.generateQR(giftQRPayload, 3);
+        const isMembership = (payment.headCode === 'MEM' || (head && head.type === 'membership') || (payment.headTitle && payment.headTitle.toLowerCase().includes('membership')));
+
+        let entryQR = "";
+        let giftQR = "";
+        if (!isMembership) {
+          const entryQRPayload = `CREA|ENTRY|${payment.invoiceNo}|${payment.headCode}|${payment.payerMobile}`;
+          const giftQRPayload = `CREA|GIFT|${payment.invoiceNo}|${payment.headCode}|${payment.payerMobile}`;
+          entryQR = this.generateQR(entryQRPayload, 3);
+          giftQR = this.generateQR(giftQRPayload, 3);
+        }
 
         document.getElementById("modal-root").innerHTML = `
           <div class="modal-overlay" onclick="app.closeModal(event)">
@@ -2309,56 +2315,81 @@ ${head.writeup || 'No detailed write-up provided.'}
                   </div>
                 </div>
 
-                <!-- 2 QR CODES: 1 FOR ATTENDANCE ENTRY, 1 FOR WELCOME GIFT -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: #f8fafc; border: 1.5px dashed #94a3b8; border-radius: 8px; padding: 14px; margin-bottom: 20px;">
-                  <!-- QR 1: Attendance Pass -->
-                  <div style="text-align: center; border-right: 1px solid #e2e8f0; padding-right: 10px;">
-                    <div style="font-size: 11px; font-weight: 800; color: #1e3a8a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-                      📷 1. Gate Entry & Attendance Pass
+                <!-- QR CODES: ONLY FOR EVENTS & TRAININGS (NOT FOR ANNUAL MEMBERSHIP) -->
+                ${!isMembership ? `
+                  <!-- 2 QR CODES: 1 FOR ATTENDANCE ENTRY, 1 FOR WELCOME GIFT -->
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: #f8fafc; border: 1.5px dashed #94a3b8; border-radius: 8px; padding: 14px; margin-bottom: 20px;">
+                    <!-- QR 1: Attendance Pass -->
+                    <div style="text-align: center; border-right: 1px solid #e2e8f0; padding-right: 10px;">
+                      <div style="font-size: 11px; font-weight: 800; color: #1e3a8a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
+                        📷 1. Gate Entry & Attendance Pass
+                      </div>
+                      <div style="display: inline-block; padding: 6px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                        ${entryQR}
+                      </div>
+                      <div style="font-size: 10.5px; color: #475569; margin-top: 4px;">
+                        Scan at kiosk entrance for verified hall entry
+                      </div>
+                      <div style="margin-top: 4px;">
+                        ${payment.attended ? `
+                          <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #dcfce7; color: #15803d; border: 1px solid #86efac; border-radius: 4px; padding: 2px 6px;">
+                            ✓ Attended (${new Date(payment.attendedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })})
+                          </span>
+                        ` : `
+                          <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 4px; padding: 2px 6px;">
+                            ● Valid for Gate Entry
+                          </span>
+                        `}
+                      </div>
                     </div>
-                    <div style="display: inline-block; padding: 6px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
-                      ${entryQR}
-                    </div>
-                    <div style="font-size: 10.5px; color: #475569; margin-top: 4px;">
-                      Scan at kiosk entrance for verified hall entry
-                    </div>
-                    <div style="margin-top: 4px;">
-                      ${payment.attended ? `
-                        <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #dcfce7; color: #15803d; border: 1px solid #86efac; border-radius: 4px; padding: 2px 6px;">
-                          ✓ Attended (${new Date(payment.attendedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })})
-                        </span>
-                      ` : `
-                        <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 4px; padding: 2px 6px;">
-                          ● Valid for Gate Entry
-                        </span>
-                      `}
-                    </div>
-                  </div>
 
-                  <!-- QR 2: Delegate Gift Kit -->
-                  <div style="text-align: center; padding-left: 10px;">
-                    <div style="font-size: 11px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-                      🎁 2. Welcome Gift / Delegate Kit
-                    </div>
-                    <div style="display: inline-block; padding: 6px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
-                      ${giftQR}
-                    </div>
-                    <div style="font-size: 10.5px; color: #475569; margin-top: 4px;">
-                      Scan at kit counter for complimentary gift
-                    </div>
-                    <div style="margin-top: 4px;">
-                      ${payment.giftCollected ? `
-                        <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #fef3c7; color: #b45309; border: 1px solid #fde68a; border-radius: 4px; padding: 2px 6px;">
-                          ✓ Gift Claimed (${new Date(payment.giftCollectedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })})
-                        </span>
-                      ` : `
-                        <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #fef3c7; color: #b45309; border: 1px solid #fde68a; border-radius: 4px; padding: 2px 6px;">
-                          ● 1 Delegate Kit Redeemable
-                        </span>
-                      `}
+                    <!-- QR 2: Delegate Gift Kit -->
+                    <div style="text-align: center; padding-left: 10px;">
+                      <div style="font-size: 11px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
+                        🎁 2. Welcome Gift / Delegate Kit
+                      </div>
+                      <div style="display: inline-block; padding: 6px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                        ${giftQR}
+                      </div>
+                      <div style="font-size: 10.5px; color: #475569; margin-top: 4px;">
+                        Scan at kit counter for complimentary gift
+                      </div>
+                      <div style="margin-top: 4px;">
+                        ${payment.giftCollected ? `
+                          <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #fef3c7; color: #b45309; border: 1px solid #fde68a; border-radius: 4px; padding: 2px 6px;">
+                            ✓ Gift Claimed (${new Date(payment.giftCollectedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })})
+                          </span>
+                        ` : `
+                          <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #fef3c7; color: #b45309; border: 1px solid #fde68a; border-radius: 4px; padding: 2px 6px;">
+                            ● 1 Delegate Kit Redeemable
+                          </span>
+                        `}
+                      </div>
                     </div>
                   </div>
-                </div>
+                ` : `
+                  <!-- For Annual Membership: Official Accredited Standing Badge (No gate pass / gift kit logic) -->
+                  <div style="background: linear-gradient(135deg, #fefce8 0%, #fef3c7 100%); border: 1.5px solid #d97706; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+                    <div style="display: flex; gap: 14px; align-items: center;">
+                      <div style="width: 44px; height: 44px; border-radius: 10px; background: linear-gradient(135deg, #d97706, #b45309); display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3); flex-shrink: 0;">
+                        🎓
+                      </div>
+                      <div>
+                        <div style="font-size: 13px; font-weight: 800; color: #92400e; text-transform: uppercase; letter-spacing: 0.5px;">
+                          Official CREA(I) Accredited Annual Membership
+                        </div>
+                        <div style="font-size: 12px; color: #78350f; margin-top: 2px;">
+                          Accreditation Validity: <strong>1st April 2026 through 31st March 2027</strong> • Member Standing: <strong style="color: #059669;">● ACTIVE & VERIFIED</strong>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="no-print">
+                      <button onclick="app.openCertificateModal('${payment.invoiceNo}', '${payment.payerId || ''}')" class="btn" style="background: linear-gradient(135deg, #d97706, #b45309); border: 1px solid #b45309; color: #ffffff; font-weight: 700; font-size: 12px; padding: 8px 14px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(217, 119, 6, 0.3);">
+                        <span>🎓</span> <span>Download Official Membership Certificate (PDF)</span>
+                      </button>
+                    </div>
+                  </div>
+                `}
 
                 <!-- Event Writeup Excerpt on Invoice -->
                 ${head && head.writeup ? `
