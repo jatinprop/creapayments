@@ -583,40 +583,90 @@
         };
       },
 
+      getHeadPrice(head, category) {
+        if (!head || !head.prices) return null;
+        const cat = category || 'member';
+        const val = head.prices[cat];
+        if (val !== null && val !== undefined && val !== "") return Number(val);
+
+        const isMem = head.code === 'MEM' || head.type === 'membership' || (head.title && head.title.toLowerCase().includes('membership'));
+
+        // Associate Member fallback: inherits member rate for trainings and events
+        if (cat === 'associate_member' || cat === 'new_member') {
+          if (head.prices.associate_member !== null && head.prices.associate_member !== undefined && head.prices.associate_member !== "") {
+            return Number(head.prices.associate_member);
+          }
+          if (head.prices.new_member !== null && head.prices.new_member !== undefined && head.prices.new_member !== "") {
+            return Number(head.prices.new_member);
+          }
+          if (!isMem && head.prices.member !== null && head.prices.member !== undefined && head.prices.member !== "") {
+            return Number(head.prices.member);
+          }
+          if (isMem) return 5000;
+        }
+
+        // Board member fallback
+        if (cat === 'board_member') {
+          if (head.prices.member !== null && head.prices.member !== undefined && head.prices.member !== "") {
+            return Number(head.prices.member);
+          }
+        }
+
+        return null;
+      },
+
       normalizeData() {
         if (!this.data) return;
         if (!this.data.heads) this.data.heads = [];
         this.data.heads.forEach(h => {
           if (!h.status) h.status = "active";
-          if (h.prices && h.prices.new_member !== undefined && h.prices.associate_member === undefined) {
+          if (!h.prices) h.prices = {};
+          if (h.prices.new_member !== undefined && (h.prices.associate_member === undefined || h.prices.associate_member === null)) {
             h.prices.associate_member = h.prices.new_member;
+          }
+          const isMem = h.code === 'MEM' || h.type === 'membership' || (h.title && h.title.toLowerCase().includes('membership'));
+          if (!isMem && (h.prices.associate_member === undefined || h.prices.associate_member === null || h.prices.associate_member === "")) {
+            if (h.prices.member !== undefined && h.prices.member !== null && h.prices.member !== "") {
+              h.prices.associate_member = Number(h.prices.member);
+            }
           }
         });
 
         if (!this.data.members) this.data.members = [];
         const fy = this.getFinancialYear();
 
+        const isFYPaid = (val, fyCode) => {
+          if (!val) return false;
+          if (typeof val === 'object') {
+            const c = val.code || val.label || '';
+            return String(c).includes(fyCode) || String(c).includes('2627') || String(c).includes('2026');
+          }
+          const s = String(val);
+          return s === fyCode || s.includes(fyCode) || s.includes('2627') || s.includes('2026-2027') || s.includes('2026-27');
+        };
+
         // Pass 1: Evaluate Regular & Board Members
         this.data.members.forEach(m => {
           if (m.category === "new_member") m.category = "associate_member";
 
           if (m.category !== "associate_member") {
-            const hasPaidCurrentFY = m.lastPaidFY === fy.code || (this.data.payments || []).some(p =>
+            const hasPaidCurrentFY = isFYPaid(m.lastPaidFY, fy.code) || (this.data.payments || []).some(p =>
               (p.payerId === m.id || p.payerMobile === m.mobile) &&
               (p.headCode === "MEM" || (p.headTitle && p.headTitle.toLowerCase().includes("membership"))) &&
-              p.status === "success" &&
-              (p.invoiceNo && p.invoiceNo.includes(fy.code))
+              p.status === "success"
             );
 
             if (hasPaidCurrentFY) {
               if (m.status !== "deactivated_manual") {
                 m.status = "active";
                 m.lastPaidFY = fy.code;
+                m.deactivationReason = null;
               }
             } else {
               // 1st April Rule: Deactivate if unpaid for current FY
               if (m.status !== "active_manual") {
                 m.status = "deactivated";
+                m.deactivationReason = `Pending ${fy.label} Annual Renewal`;
                 m.activationNote = m.activationNote || `Pending ${fy.label} Annual Renewal`;
               }
             }
@@ -626,22 +676,31 @@
         // Pass 2: Evaluate Associate Members (DEPENDENT on Main Member!)
         this.data.members.forEach(m => {
           if (m.category === "associate_member") {
-            const mainMember = this.data.members.find(p => p.id === m.parentMemberId || p.mobile === m.parentMemberMobile);
-            const isMainMemberActive = mainMember && mainMember.status === "active" && mainMember.lastPaidFY === fy.code;
+            const mainMember = this.data.members.find(p =>
+              (m.parentMemberId && p.id === m.parentMemberId) ||
+              (m.parentMemberMobile && p.mobile === m.parentMemberMobile) ||
+              (m.parentMemberName && p.name && p.name.trim().toLowerCase() === m.parentMemberName.trim().toLowerCase())
+            );
 
-            const hasAssociatePaid = m.lastPaidFY === fy.code || (this.data.payments || []).some(p =>
+            const mainMemberHasPaid = mainMember && (isFYPaid(mainMember.lastPaidFY, fy.code) || (this.data.payments || []).some(p =>
+              (p.payerId === mainMember.id || p.payerMobile === mainMember.mobile) &&
+              (p.headCode === "MEM" || (p.headTitle && p.headTitle.toLowerCase().includes("membership"))) &&
+              p.status === "success"
+            ));
+            const isMainMemberActive = mainMember && mainMember.status === "active" && mainMemberHasPaid;
+
+            const hasAssociatePaid = isFYPaid(m.lastPaidFY, fy.code) || (this.data.payments || []).some(p =>
               (p.payerId === m.id || p.payerMobile === m.mobile) &&
               (p.headCode === "MEM" || (p.headTitle && p.headTitle.toLowerCase().includes("membership"))) &&
-              p.status === "success" &&
-              (p.invoiceNo && p.invoiceNo.includes(fy.code))
+              p.status === "success"
             );
 
             // Strict Rule: Main member MUST be active and paid.
             // If main member is unpaid, associate is DEACTIVATED irrespective of associate payment!
             if (!isMainMemberActive) {
               m.status = "deactivated";
-              m.deactivationReason = `Main Member (${mainMember ? mainMember.name : "Unassigned"}) membership unpaid for ${fy.label}`;
-              m.activationNote = `Deactivated: Main Member (${mainMember ? mainMember.name : "Unassigned"}) has not paid FY dues`;
+              m.deactivationReason = `Main Member (${mainMember ? mainMember.name : (m.parentMemberName || "Linked")}) membership unpaid for ${fy.label}`;
+              m.activationNote = `Deactivated: Main Member (${mainMember ? mainMember.name : (m.parentMemberName || "Linked")}) has not paid FY dues`;
             } else if (!hasAssociatePaid) {
               m.status = "deactivated";
               m.deactivationReason = `Associate Member renewal fee pending for ${fy.label}`;
@@ -649,6 +708,10 @@
             } else {
               m.status = "active";
               m.lastPaidFY = fy.code;
+              m.deactivationReason = null;
+              if (!m.activationNote || m.activationNote.toLowerCase().includes("pending") || m.activationNote.toLowerCase().includes("deactivated")) {
+                m.activationNote = `Associate Fee Paid (${fy.label}) — Main Member Active`;
+              }
             }
           }
         });
@@ -800,30 +863,26 @@
                   ⚡ Quick Demo Login (Click to Autologin):
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 6px;">
-                  <button onclick="app.loginDemo('9800000001')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500;">
-                    <span>Ramesh Gupta (Regular Member — Active)</span>
-                    <span class="badge badge-member">9800000001</span>
-                  </button>
-                  <button onclick="app.loginDemo('9800000002')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500;">
-                    <span>Sneha Patel (Associate Member — Active, Main: Ramesh)</span>
-                    <span class="badge badge-associate_member">9800000002</span>
-                  </button>
-                  <button onclick="app.loginDemo('9800000003')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500;">
-                    <span>Vikramaditya Rao (Board Member — Active)</span>
-                    <span class="badge badge-board_member">9800000003</span>
-                  </button>
-                  <button onclick="app.loginDemo('9711288901')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500; border-color: rgba(239, 68, 68, 0.35);">
-                    <span style="color: #fca5a5;">Kavita Reddy (Associate — Deactivated: Own Fee Unpaid)</span>
-                    <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">9711288901</span>
-                  </button>
-                  <button onclick="app.loginDemo('9880011224')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500; border-color: rgba(239, 68, 68, 0.35);">
-                    <span style="color: #fca5a5;">Rahul Varma (Associate — Deactivated: Parent Unpaid)</span>
-                    <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">9880011224</span>
-                  </button>
-                  <button onclick="app.loginDemo('9988776655')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500; border-color: rgba(239, 68, 68, 0.35);">
-                    <span style="color: #fca5a5;">Sunita Sharma (Regular Member — Deactivated: Unpaid)</span>
-                    <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">9988776655</span>
-                  </button>
+                  ${(() => {
+                    const demoMobiles = [
+                      { m: '9800000001', label: 'Ramesh Gupta', role: 'Regular Member', badge: 'badge-member' },
+                      { m: '9800000002', label: 'Sneha Patel', role: 'Associate Member', extra: 'Main: Ramesh', badge: 'badge-associate_member' },
+                      { m: '9800000003', label: 'Vikramaditya Rao', role: 'Board Member', badge: 'badge-board_member' },
+                      { m: '9711288901', label: 'Kavita Reddy', role: 'Associate Member', extra: 'Main: Anand', badge: 'badge-associate_member' },
+                      { m: '9880011224', label: 'Rahul Varma', role: 'Associate Member', extra: 'Main: Sunita', badge: 'badge-associate_member' },
+                      { m: '9988776655', label: 'Sunita Sharma', role: 'Regular Member', badge: 'badge-member' }
+                    ];
+                    return demoMobiles.map(item => {
+                      const mem = (this.data.members || []).find(x => x.mobile === item.m);
+                      const isActive = mem && mem.status === 'active';
+                      return `
+                        <button onclick="app.loginDemo('${item.m}')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500; ${!isActive ? 'border-color: rgba(239, 68, 68, 0.35);' : ''}">
+                          <span style="${!isActive ? 'color: #fca5a5;' : ''}">${item.label} (${item.role} — ${isActive ? 'Active' : 'Deactivated'}${item.extra ? `, ${item.extra}` : ''})</span>
+                          <span class="badge ${isActive ? item.badge : ''}" style="${!isActive ? 'background: rgba(239, 68, 68, 0.2); color: #f87171;' : ''}">${item.m}</span>
+                        </button>
+                      `;
+                    }).join('');
+                  })()}
                 </div>
               </div>
 
@@ -858,7 +917,7 @@
           const isDeactivated = h.status === 'deactivated' || h.status === 'inactive';
           const isDeleted = h.status === 'deleted' || h.isDeleted;
           const isExpired = h.activeUntil && new Date(h.activeUntil) < now;
-          const price = h.prices ? h.prices[member.category] : null;
+          const price = this.getHeadPrice(h, member.category);
           const hasPrice = price !== null && price !== undefined && price !== "";
           const alreadyPaid = memberPayments.some(p => p.headId === h.id || p.headCode === h.code);
 
@@ -944,7 +1003,7 @@
                   </div>
                 </div>
                 ${memHead ? `
-                  <button onclick="app.openPaymentModal('${memHead.id}')" class="btn btn-primary" style="background: #ef4444; border-color: #dc2626; padding: 10px 20px; font-size: 13px; font-weight: 800; box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);">
+                  <button onclick="app.openPaymentModal('${memHead.id}', 'member')" class="btn btn-primary" style="background: #ef4444; border-color: #dc2626; padding: 10px 20px; font-size: 13px; font-weight: 800; box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);">
                     💳 Pay Dues & Reactivate Now
                   </button>
                 ` : `
@@ -1081,7 +1140,7 @@
             <!-- Open Active Heads Grid -->
             <div class="heads-grid">
               ${activeOpenHeads.map(h => {
-                const basePrice = Number(h.prices[member.category]);
+                const basePrice = this.getHeadPrice(h, member.category);
                 const cgst = Math.round(basePrice * 0.09 * 100) / 100;
                 const sgst = Math.round(basePrice * 0.09 * 100) / 100;
                 const totalAmount = Math.round((basePrice + cgst + sgst) * 100) / 100;
@@ -1962,7 +2021,8 @@ ${head.writeup || 'No detailed write-up provided.'}
 
         let payerName, payerMobile, payerEmail, payerCategory, payerType, payerId, payerGstin, payerAddress;
 
-        if (mode === "member") {
+        const isMember = mode === "member" || (!mode && Boolean(this.loggedInMember));
+        if (isMember) {
           if (!this.loggedInMember) {
             alert("Please sign in as a member first.");
             return;
@@ -1993,7 +2053,7 @@ ${head.writeup || 'No detailed write-up provided.'}
           }
         }
 
-        const basePrice = head.prices[payerCategory];
+        const basePrice = this.getHeadPrice(head, payerCategory);
         if (basePrice === null || basePrice === undefined) {
           alert("This payment head is not available for this category.");
           return;
@@ -2092,7 +2152,13 @@ ${head.writeup || 'No detailed write-up provided.'}
           return;
         }
 
-        const base = Number(head.prices[payerCategory]);
+        const basePrice = this.getHeadPrice(head, payerCategory);
+        if (basePrice === null || basePrice === undefined) {
+          alert("No price configured for this category.");
+          return;
+        }
+
+        const base = Number(basePrice);
         const cgst = Math.round(base * 0.09 * 100) / 100;
         const sgst = Math.round(base * 0.09 * 100) / 100;
         const totalGst = Math.round((cgst + sgst) * 100) / 100;
@@ -2173,7 +2239,8 @@ ${head.writeup || 'No detailed write-up provided.'}
             mem.status = "active";
             mem.lastPaidFY = fy.code;
             mem.paymentMeans = "Online Gateway";
-            mem.activationNote = `Paid Online (Invoice ${invoiceNo})`;
+            mem.activationNote = (mem.category === 'associate_member') ? `Associate Fee Paid (Invoice ${invoiceNo})` : `Paid Online (Invoice ${invoiceNo})`;
+            mem.deactivationReason = null;
           }
           this.normalizeData();
         }
@@ -2799,11 +2866,12 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
         const venue = document.getElementById("new-head-venue").value.trim();
         const writeup = document.getElementById("new-head-writeup").value.trim();
 
-        const assocPriceVal = document.getElementById("price-associate_member")?.value || document.getElementById("price-new_member")?.value;
+        const memPriceVal = document.getElementById("price-member").value;
+        const assocPriceVal = document.getElementById("price-associate_member")?.value || document.getElementById("price-new_member")?.value || (type !== 'membership' && code !== 'MEM' ? memPriceVal : null);
         const prices = {
           associate_member: assocPriceVal ? Number(assocPriceVal) : null,
           new_member: assocPriceVal ? Number(assocPriceVal) : null,
-          member: document.getElementById("price-member").value ? Number(document.getElementById("price-member").value) : null,
+          member: memPriceVal ? Number(memPriceVal) : null,
           board_member: document.getElementById("price-board_member").value ? Number(document.getElementById("price-board_member").value) : null,
           non_member: document.getElementById("price-non_member").value ? Number(document.getElementById("price-non_member").value) : null
         };
@@ -3249,11 +3317,12 @@ Participants receive official CREA(I) accreditation credits, certified study mat
           return Number(val);
         };
 
-        const assocVal = parsePrice("edit-price-associate_member") ?? parsePrice("edit-price-new_member");
+        const memVal = parsePrice("edit-price-member");
+        const assocVal = parsePrice("edit-price-associate_member") ?? parsePrice("edit-price-new_member") ?? (type !== 'membership' && code !== 'MEM' ? memVal : null);
         const prices = {
           associate_member: assocVal,
           new_member: assocVal,
-          member: parsePrice("edit-price-member"),
+          member: memVal,
           board_member: parsePrice("edit-price-board_member"),
           non_member: parsePrice("edit-price-non_member")
         };
@@ -3454,18 +3523,17 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                         <td>
                           ${m.status === 'active' ? `
                             <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid #059669; font-size: 11px;">● Active</span>
+                            ${m.activationNote ? `
+                              <div style="font-size: 10px; color: #6ee7b7; margin-top: 2px; max-width: 180px; line-height: 1.2;">
+                                ${m.activationNote}
+                              </div>
+                            ` : ''}
                           ` : `
                             <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid #dc2626; font-size: 11px;">⏸ Deactivated</span>
+                            <div style="font-size: 10px; color: #f87171; margin-top: 2px; max-width: 180px; line-height: 1.2;">
+                              ${m.deactivationReason || m.activationNote || `Pending ${this.getFinancialYear().label} Renewal`}
+                            </div>
                           `}
-                          ${m.deactivationReason ? `
-                            <div style="font-size: 10px; color: #f87171; margin-top: 2px; max-width: 160px; line-height: 1.2;">
-                              ${m.deactivationReason}
-                            </div>
-                          ` : (m.activationNote ? `
-                            <div style="font-size: 10px; color: #6ee7b7; margin-top: 2px; max-width: 160px; line-height: 1.2;">
-                              ${m.activationNote}
-                            </div>
-                          ` : '')}
                         </td>
                         <td>
                           <div style="display: flex; gap: 4px; align-items: center;">
@@ -3541,7 +3609,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
           company: "Independent Realtor",
           city: "Bangalore",
           status: "active",
-          lastPaidFY: currentFY,
+          lastPaidFY: currentFY.code,
           paymentMeans: "Admin Direct",
           activationNote: "Added by Administrator",
           joinedDate: new Date().toISOString().split("T")[0]
@@ -3604,7 +3672,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
 
         const currentFY = this.getFinancialYear();
         const memHead = this.data.heads.find(h => h.code === "MEM" || h.type === "membership");
-        const baseDues = memHead ? (memHead.prices[mem.category] || (mem.category === 'associate_member' ? 5000 : 10000)) : 10000;
+        const baseDues = Number(this.getHeadPrice(memHead, mem.category) || (mem.category === 'associate_member' ? 5000 : 10000));
         const totalWithGst = Math.round(baseDues * 1.18);
 
         let parentWarning = '';
@@ -3669,10 +3737,10 @@ Participants receive official CREA(I) accreditation credits, certified study mat
               <div class="form-group" style="background: #090f1d; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--card-border);">
                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12.5px; font-weight: 600;">
                   <input type="checkbox" id="manual-create-inv" checked style="accent-color: #38bdf8; width: 16px; height: 16px;">
-                  Generate Official Tax Invoice for FY ${currentFY} (CREA/${currentFY}/MEM/...)
+                  Generate Official Tax Invoice for ${currentFY.label} (CREA/${currentFY.code}/MEM/...)
                 </label>
                 <div style="font-size: 11px; color: var(--text-muted); margin-left: 24px; margin-top: 2px;">
-                  Creates an itemized GST Tax Invoice with Gate Entry & Welcome Gift QR codes.
+                  Creates an itemized GST Tax Invoice with Official CREA(I) Accredited Standing.
                 </div>
               </div>
 
@@ -3702,15 +3770,15 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         const memHead = this.data.heads.find(h => h.code === "MEM" || h.type === "membership") || this.data.heads[0];
 
         mem.status = "active";
-        mem.lastPaidFY = currentFY;
+        mem.lastPaidFY = currentFY.code;
         mem.paymentMeans = paymentMeans;
-        mem.activationNote = description;
+        mem.activationNote = (mem.category === 'associate_member') ? `Associate Fee Paid (${currentFY.label}) via ${paymentMeans}: ${description}` : description;
         mem.deactivationReason = null;
 
         let generatedInvoiceNo = null;
 
         if (createInvoice && memHead) {
-          const base = Number(memHead.prices[mem.category] || (mem.category === 'associate_member' ? 5000 : 10000));
+          const base = Number(this.getHeadPrice(memHead, mem.category) || (mem.category === 'associate_member' ? 5000 : 10000));
           const cgst = Math.round(base * 0.09 * 100) / 100;
           const sgst = Math.round(base * 0.09 * 100) / 100;
           const totalGst = Math.round((cgst + sgst) * 100) / 100;
@@ -3719,7 +3787,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
           const nextSerial = (this.data.invoiceCounter || 0) + 1;
           this.data.invoiceCounter = nextSerial;
           const serialStr = String(nextSerial).padStart(4, "0");
-          generatedInvoiceNo = `CREA/${currentFY}/${memHead.code.toUpperCase()}/${serialStr}`;
+          generatedInvoiceNo = `CREA/${currentFY.code}/${memHead.code.toUpperCase()}/${serialStr}`;
 
           const paymentRecord = {
             id: `pay-${Date.now()}`,
@@ -3769,7 +3837,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         this.saveToStorage();
         this.render();
 
-        alert(`✓ Member '${mem.name}' has been successfully ACTIVATED for FY ${currentFY}!\n${generatedInvoiceNo ? `Tax Invoice ${generatedInvoiceNo} created.` : ''}`);
+        alert(`✓ Member '${mem.name}' has been successfully ACTIVATED for ${currentFY.label}!\n${generatedInvoiceNo ? `Tax Invoice ${generatedInvoiceNo} created.` : ''}`);
         this.openMembersModal();
       },
 
@@ -4427,11 +4495,11 @@ Participants receive official CREA(I) accreditation credits, certified study mat
             payerId = null;
           }
 
-          const validHeads = this.data.heads.filter(h => h.status !== 'deactivated' && h.status !== 'inactive' && h.status !== 'deleted' && !h.isDeleted && h.prices && h.prices[cat] !== null && h.prices[cat] !== undefined);
+          const validHeads = this.data.heads.filter(h => h.status !== 'deactivated' && h.status !== 'inactive' && h.status !== 'deleted' && !h.isDeleted && this.getHeadPrice(h, cat) !== null);
           if (validHeads.length === 0) continue;
           const head = validHeads[Math.floor(Math.random() * validHeads.length)];
 
-          const base = Number(head.prices[cat]);
+          const base = Number(this.getHeadPrice(head, cat));
           const cgst = Math.round(base * 0.09 * 100) / 100;
           const sgst = Math.round(base * 0.09 * 100) / 100;
           const totalGst = Math.round((cgst + sgst) * 100) / 100;
