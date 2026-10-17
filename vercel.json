@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "name": "crea-payment-suite",
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/api/head/status", "destination": "/api/head-status" },
+    { "source": "/api/head/update", "destination": "/api/head" },
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

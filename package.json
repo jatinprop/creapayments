@@ -1,0 +1,28 @@
+{
+  "name": "crea-payment-suite",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "CREA(I) - Confederation of Real Estate Associates (India) Payment & Membership Management Portal",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "seed:supabase": "node scripts/seed-supabase.js",
+    "deploy": "vercel",
+    "deploy:prod": "vercel --prod"
+  },
+  "keywords": [
+    "crea",
+    "real-estate",
+    "payments",
+    "membership",
+    "gst",
+    "invoicing"
+  ],
+  "author": "CREA(I) Tech Team",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
+    "dotenv": "^18.0.8"
+  }
+}

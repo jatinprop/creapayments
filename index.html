@@ -1,0 +1,2796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CREA(I) — Real Estate Payment & Membership Management Suite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #070b14;
+      --card-bg: #0d1527;
+      --card-border: #1e293d;
+      --card-hover: #162035;
+      --primary: #2563eb;
+      --primary-light: #38bdf8;
+      --primary-dark: #1d4ed8;
+      --gold: #f59e0b;
+      --gold-light: #fcd34d;
+      --success: #10b981;
+      --success-bg: rgba(16, 185, 129, 0.12);
+      --danger: #ef4444;
+      --danger-bg: rgba(239, 68, 68, 0.12);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Top Notice Bar */
+    .top-strip {
+      background: linear-gradient(90deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+      border-bottom: 1px solid var(--card-border);
+      padding: 8px 24px;
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .top-strip .tag {
+      background: rgba(37, 99, 235, 0.2);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--primary-light);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+
+    /* Navigation Header */
+    header {
+      background: rgba(13, 21, 39, 0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--card-border);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      padding: 14px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .brand-container {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+    }
+
+    .brand-logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #0284c7 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .brand-text h1 {
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-text p {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .nav-tabs {
+      display: flex;
+      background: #090f1d;
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 4px;
+      gap: 4px;
+    }
+
+    .nav-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.18s ease;
+    }
+
+    .nav-btn.active {
+      background: #1e293b;
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--card-border);
+    }
+
+    .nav-btn:hover:not(.active) {
+      color: #f1f5f9;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      max-width: 1280px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 32px 24px 60px 24px;
+    }
+
+    /* Cards & Containers */
+    .glass-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+      position: relative;
+    }
+
+    .glass-card:hover {
+      border-color: #2b3a55;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-member { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+    .badge-new_member { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-board_member { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+    .badge-non_member { background: rgba(148, 163, 184, 0.15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3); }
+    .badge-paid { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-open { background: rgba(37, 99, 235, 0.15); color: #60a5fa; border: 1px solid rgba(37, 99, 235, 0.3); }
+    .badge-active { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); }
+    .badge-deactivated { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.16s ease;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      color: #ffffff;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+    }
+    .btn-primary:hover {
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .btn-success {
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      color: #ffffff;
+      box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35);
+    }
+    .btn-success:hover {
+      box-shadow: 0 6px 20px rgba(5, 150, 105, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: #1e293b;
+      color: #e2e8f0;
+      border: 1px solid var(--card-border);
+    }
+    .btn-secondary:hover {
+      background: #27354a;
+      color: #ffffff;
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--primary-light);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+    }
+    .btn-outline:hover {
+      background: rgba(56, 189, 248, 0.1);
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: 6px;
+    }
+
+    /* Grid Layouts */
+    .heads-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 24px;
+      margin-top: 24px;
+    }
+
+    .head-card {
+      background: #0f172a;
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: border-color 0.18s ease, transform 0.18s ease;
+    }
+    .head-card:hover {
+      border-color: #38bdf8;
+      transform: translateY(-2px);
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(6px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 20px;
+    }
+
+    .modal-box {
+      background: #0e1629;
+      border: 1px solid #1f2d47;
+      border-radius: 18px;
+      max-width: 650px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7);
+      padding: 28px;
+      position: relative;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 16px;
+      margin-bottom: 20px;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 22px;
+      cursor: pointer;
+      padding: 4px;
+      line-height: 1;
+    }
+    .modal-close:hover { color: #ffffff; }
+
+    /* Inputs */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin-bottom: 6px;
+    }
+
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      padding: 11px 14px;
+      background: #090f1e;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      color: #ffffff;
+      font-size: 13.5px;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      border-color: var(--primary-light);
+    }
+
+    /* Tables */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .data-table th {
+      background: #090f1d;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .data-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid #141f33;
+      color: #e2e8f0;
+    }
+
+    .data-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .data-table tfoot td {
+      background: #080e1d;
+      color: #ffffff;
+      padding: 13px 14px;
+      border-top: 2px solid rgba(56, 189, 248, 0.45);
+      border-bottom: 2px solid rgba(56, 189, 248, 0.45);
+    }
+
+    /* Print Invoice Styling */
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #printable-invoice-container, #printable-invoice-container * {
+        visibility: visible;
+      }
+      #printable-invoice-container {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: #ffffff !important;
+        color: #000000 !important;
+        padding: 20px !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. Top Strip -->
+  <div class="top-strip">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span class="tag">CREA(I)</span>
+      <span>Confederation of Real Estate Associates (India) • Payment & Invoicing Hub</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 16px; color: var(--text-muted);">
+      <span>Financial Year: <strong style="color: #38bdf8;">2026-2027 (FY2627)</strong></span>
+      <span>GSTIN: <strong style="color: #ffffff;">29AAAAA0000A1Z5</strong> (18% GST Applicable)</span>
+    </div>
+  </div>
+
+  <!-- 2. Header Bar -->
+  <header>
+    <div class="brand-container" onclick="app.switchTab('member')">
+      <div class="brand-logo">🏛️</div>
+      <div class="brand-text">
+        <h1>CREA(I) <span>PAY</span></h1>
+        <p>Real Estate Associate Payment Portal</p>
+      </div>
+    </div>
+
+    <!-- Segmented Mode Switcher -->
+    <div class="nav-tabs">
+      <button class="nav-btn active" id="tab-btn-member" onclick="app.switchTab('member')">
+        👤 Member Portal
+      </button>
+      <button class="nav-btn" id="tab-btn-guest" onclick="app.switchTab('guest')">
+        👥 Non-Member / Guest
+      </button>
+      <button class="nav-btn" id="tab-btn-admin" onclick="app.switchTab('admin')">
+        🛡️ Admin Portal
+      </button>
+    </div>
+  </header>
+
+  <!-- 3. Main Workspace Container -->
+  <main id="app-viewport">
+    <!-- Dynamic views rendered via JavaScript -->
+  </main>
+
+  <!-- 4. Global Modals Placeholder -->
+  <div id="modal-root"></div>
+
+  <!-- 5. Application Core Logic -->
+  <script>
+    // State Store (Auto-initializes with demo data in localStorage if server is not present)
+    const app = {
+      currentTab: "member",
+      loggedInMember: null, // Holds active member profile
+      guestInfo: { name: "", mobile: "", email: "" },
+      adminPin: "crea-admin",
+      isAdminAuthenticated: false,
+      
+      // Filters for Admin
+      adminFilter: {
+        head: "all",
+        type: "all", // all | member | non_member
+        fromMonth: "2026-08",
+        toMonth: "2026-12",
+        search: ""
+      },
+
+      data: null, // Will load from server or fallback localStorage
+
+      async init() {
+        // Fetch data from local Node server or fallback
+        try {
+          const res = await fetch("/api/data");
+          if (res.ok) {
+            const json = await res.json();
+            this.data = json.data;
+          } else {
+            throw new Error("Local API offline");
+          }
+        } catch (e) {
+          console.log("Using browser offline storage");
+          this.loadFromStorage();
+        }
+
+        // Ensure heads have status
+        this.normalizeData();
+
+        // Restore member session
+        const savedMember = localStorage.getItem("crea_member");
+        if (savedMember) {
+          try { this.loggedInMember = JSON.parse(savedMember); } catch(e){}
+        }
+
+        this.render();
+      },
+
+      loadFromStorage() {
+        const stored = localStorage.getItem("crea_data_store");
+        if (stored) {
+          this.data = JSON.parse(stored);
+        } else {
+          // Initialize default store
+          this.data = this.getDefaultStore();
+          this.saveToStorage();
+        }
+        this.normalizeData();
+      },
+
+      normalizeData() {
+        if (!this.data) return;
+        if (!this.data.heads) this.data.heads = [];
+        this.data.heads.forEach(h => {
+          if (!h.status) h.status = "active";
+        });
+      },
+
+      escapeHtml(str) {
+        if (str === null || str === undefined) return "";
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      },
+
+      saveToStorage() {
+        localStorage.setItem("crea_data_store", JSON.stringify(this.data));
+      },
+
+      getDefaultStore() {
+        const fy = "2627";
+        return {
+          invoiceCounter: 14,
+          members: [
+            { id: "mem-001", name: "Ramesh Gupta", mobile: "9800000001", email: "ramesh.gupta@crea-realty.in", category: "member", company: "Apex Prime Realty", city: "Bangalore" },
+            { id: "mem-002", name: "Sneha Patel", mobile: "9800000002", email: "sneha.p@lotushomes.co", category: "new_member", company: "Lotus Property Consultants", city: "Bangalore" },
+            { id: "mem-003", name: "Vikramaditya Rao", mobile: "9800000003", email: "v.rao@deccanproperties.com", category: "board_member", company: "Deccan Realtors & Estates", city: "Bangalore" },
+            { id: "mem-004", name: "Anand Murthy", mobile: "9845999000", email: "anand.m@staypolis.com", category: "member", company: "Staypolis Brokerage", city: "Bangalore" },
+            { id: "mem-005", name: "Kavita Reddy", mobile: "9711288901", email: "kavita.r@reddyrealty.in", category: "new_member", company: "Reddy Associates", city: "Bangalore" }
+          ],
+          heads: [
+            {
+              id: "head-mem",
+              code: "MEM",
+              title: "Annual CREA(I) Membership 2026-2027",
+              type: "membership",
+              eventDate: "2026-04-01",
+              eventTime: "Full Year Access",
+              venue: "CREA(I) Headquarters & All Chapters",
+              activeUntil: "2027-03-31T23:59:59",
+              status: "active",
+              prices: { new_member: 12000, member: 10000, board_member: 8000, non_member: null },
+              writeup: "The Confederation of Real Estate Associates (India) — CREA(I) is the premier self-regulatory association of professional real estate brokers, property managers, and valuation experts in South India.\n\nYour annual membership subscription for FY 2026-2027 entitles your firm to comprehensive professional standing, legal assistance on brokerage covenant disputes, and direct integration into the CREA Multi-Listing Exchange (MLE). Over the past twelve months, CREA(I) mediated over 140 commercial leasing transactions and spearheaded ethical commission standardization benchmarks across residential corridors.\n\nKey Member Privileges:\n1. Official CREA(I) Certified Realtor Certificate and verified digital credentials for client trust.\n2. Direct access to our monthly Legal & Notary clinic for RERA complaints, draft scrutiny, and deposit escrow guidance.\n3. Preferential registration rates on all accredited broker mastery certifications and quarterly state symposia.\n4. Comprehensive arbitration board access in the event of client or fellow broker commission evasion.\n5. Complimentary entry to the bi-annual Property Showcase networking breakfasts with tier-1 developers including Prestige, Sobha, and Brigade.\n\nMembers are requested to complete renewal promptly to prevent de-listing from the public verified realtor register."
+            },
+            {
+              id: "head-trn1",
+              code: "TRN1",
+              title: "Masterclass: RERA Compliance, Title Verification & Escrows",
+              type: "training",
+              eventDate: "2026-10-28",
+              eventTime: "10:00 AM - 4:00 PM IST",
+              venue: "The Lalit Hotel, High Grounds, Bangalore",
+              activeUntil: "2026-10-28T09:00:00",
+              status: "active",
+              prices: { new_member: 1500, member: 1200, board_member: 0, non_member: 2500 },
+              writeup: "RERA litigation and title verification scrutiny have transformed real estate transactions into rigorous legal engagements. This full-day intensive masterclass is curated specifically for practicing real estate brokers, leasing executives, and independent agents seeking to eliminate liability and elevate deal closings.\n\nLed by Senior Advocate & Real Estate Arbitrator Mr. Ajay Venkatesh along with seasoned land revenue experts, this masterclass delves into practical title search methodologies across Karnataka land records including RTC (Pahani), Encumbrance Certificates (Form 15 & 16), Katha extract nuances (e-Katha vs A-Katha vs B-Katha), and BDA/BMRDA layout approval checks.\n\nKey Highlights of the Syllabus:\n1. Identifying encumbrances, litigation flags, and revenue dispute caveats before listing properties.\n2. Formulating watertight rental and sale agreements that safeguard broker commissions against client circumvention.\n3. RERA Section 9 and 10 agent compliance mandates, annual filings, and advertising dos and don'ts.\n4. Managing client advance tokens and escrow protocol to safeguard earnest deposits.\n5. Interactive case studies on 5 high-profile land title defects resolved in Bangalore courts.\n\nIncludes accredited certification, comprehensive take-home legal draft toolkit on pendrive, gourmet lunch, and high-tea networking with senior legal professionals."
+            },
+            {
+              id: "head-trn2",
+              code: "TRN2",
+              title: "Executive Training: Digital Lead Generation & NRI Client Acquisition",
+              type: "training",
+              eventDate: "2026-11-18",
+              eventTime: "02:00 PM - 06:00 PM IST",
+              venue: "Virtual Live Interactive Studio (Zoom HD)",
+              activeUntil: "2026-11-18T13:30:00",
+              status: "active",
+              prices: { new_member: 1000, member: 800, board_member: 0, non_member: 1800 },
+              writeup: "High-net-worth individuals and Non-Resident Indians (NRIs) represent over 38% of luxury real estate purchases and premium commercial leasing volume in metropolitan Bangalore. Reaching and qualifying these diaspora investors requires sophisticated digital acquisition funnels beyond conventional classifieds.\n\nThis intensive interactive webinar equips real estate professionals with automated lead generation systems, WhatsApp Business automation workflows, and high-converting performance marketing campaigns on Google Search and Meta Ads.\n\nWorkshop Outline:\n1. Setting up geo-targeted campaigns targeting NRI hubs in the UAE, United States, United Kingdom, and Singapore.\n2. Crafting video walkthrough presentations that convert remote NRI buyers without requiring physical property visits.\n3. Automated WhatsApp CRM workflows for immediate lead engagement within 90 seconds of portal inquiry.\n4. Navigating FEMA regulations, NRE/NRO bank accounts, repatriation covenants, and Power of Attorney (PoA) stamping.\n5. Live demonstration of AI tools for generating property inspection reports and personalized investor pitch decks.\n\nParticipants will receive ready-to-deploy ad copy templates, email sequences, and a recording valid for 12 months."
+            },
+            {
+              id: "head-evt1",
+              code: "EVT1",
+              title: "CREA(I) Annual Realty Conclave & Networking Gala 2026",
+              type: "event",
+              eventDate: "2026-12-12",
+              eventTime: "06:00 PM - 10:30 PM IST",
+              venue: "Grand Ballroom, ITC Windsor, Golf Course Road, Bangalore",
+              activeUntil: "2026-12-12T17:00:00",
+              status: "active",
+              prices: { new_member: 3500, member: 2800, board_member: 2000, non_member: 5000 },
+              writeup: "The Confederation of Real Estate Associates (India) cordially invites you to our flagship annual gathering — the CREA(I) Annual Realty Conclave & Networking Gala 2026. This landmark evening brings together over 400 distinguished real estate brokers, developers, legal luminaries, and government dignitaries under one roof.\n\nTheme for 2026: 'The Next Decade of Urban Mobility & PropTech Growth in Bangalore'.\n\nEvening Itinerary:\n- 06:00 PM - Registration & Welcome High Tea\n- 06:45 PM - Keynote Address by Hon'ble Minister for Housing & Urban Infrastructure\n- 07:30 PM - Panel Discussion: Infrastructure corridors (Metro Phase 3, PRR & STRR) shaping high-yield residential clusters\n- 08:30 PM - Presentation of the CREA(I) Excellence Awards recognizing top brokerages across South India\n- 09:15 PM - Cocktail Reception, Gala Dinner & Unveiling of the CREA Property Research Whitepaper 2027\n\nDress Code: Formal Western / Indian Traditional Formal.\nComplimentary valet parking available at the venue."
+            }
+          ],
+          payments: [
+            { id: "pay-101", invoiceNo: `CREA/${fy}/MEM/0001`, serial: 1, date: "2026-08-05T10:15:00.000Z", headId: "head-mem", headCode: "MEM", headTitle: "Annual CREA(I) Membership 2026-2027", payerType: "member", payerCategory: "member", payerId: "mem-001", payerName: "Ramesh Gupta", payerMobile: "9800000001", payerEmail: "ramesh.gupta@crea-realty.in", baseAmount: 10000, cgst: 900, sgst: 900, totalGst: 1800, totalAmount: 11800, status: "success" },
+            { id: "pay-102", invoiceNo: `CREA/${fy}/MEM/0002`, serial: 2, date: "2026-08-07T14:20:00.000Z", headId: "head-mem", headCode: "MEM", headTitle: "Annual CREA(I) Membership 2026-2027", payerType: "member", payerCategory: "board_member", payerId: "mem-003", payerName: "Vikramaditya Rao", payerMobile: "9800000003", payerEmail: "v.rao@deccanproperties.com", baseAmount: 8000, cgst: 720, sgst: 720, totalGst: 1440, totalAmount: 9440, status: "success" },
+            { id: "pay-103", invoiceNo: `CREA/${fy}/MEM/0003`, serial: 3, date: "2026-08-14T11:05:00.000Z", headId: "head-mem", headCode: "MEM", headTitle: "Annual CREA(I) Membership 2026-2027", payerType: "member", payerCategory: "new_member", payerId: "mem-002", payerName: "Sneha Patel", payerMobile: "9800000002", payerEmail: "sneha.p@lotushomes.co", baseAmount: 12000, cgst: 1080, sgst: 1080, totalGst: 2160, totalAmount: 14160, status: "success" },
+            { id: "pay-104", invoiceNo: `CREA/${fy}/TRN1/0004`, serial: 4, date: "2026-08-20T09:40:00.000Z", headId: "head-trn1", headCode: "TRN1", headTitle: "Masterclass: RERA Compliance, Title Verification & Escrows", payerType: "member", payerCategory: "member", payerId: "mem-001", payerName: "Ramesh Gupta", payerMobile: "9800000001", payerEmail: "ramesh.gupta@crea-realty.in", baseAmount: 1200, cgst: 108, sgst: 108, totalGst: 216, totalAmount: 1416, status: "success" },
+            { id: "pay-105", invoiceNo: `CREA/${fy}/TRN1/0005`, serial: 5, date: "2026-08-22T16:15:00.000Z", headId: "head-trn1", headCode: "TRN1", headTitle: "Masterclass: RERA Compliance, Title Verification & Escrows", payerType: "non_member", payerCategory: "non_member", payerId: null, payerName: "Siddharth Joshi", payerMobile: "9845112233", payerEmail: "sid.joshi@urbanestates.in", baseAmount: 2500, cgst: 225, sgst: 225, totalGst: 450, totalAmount: 2950, status: "success" },
+            { id: "pay-106", invoiceNo: `CREA/${fy}/MEM/0006`, serial: 6, date: "2026-09-01T10:00:00.000Z", headId: "head-mem", headCode: "MEM", headTitle: "Annual CREA(I) Membership 2026-2027", payerType: "member", payerCategory: "member", payerId: "mem-004", payerName: "Anand Murthy", payerMobile: "9845999000", payerEmail: "anand.m@staypolis.com", baseAmount: 10000, cgst: 900, sgst: 900, totalGst: 1800, totalAmount: 11800, status: "success" },
+            { id: "pay-107", invoiceNo: `CREA/${fy}/TRN1/0007`, serial: 7, date: "2026-09-04T12:30:00.000Z", headId: "head-trn1", headCode: "TRN1", headTitle: "Masterclass: RERA Compliance, Title Verification & Escrows", payerType: "member", payerCategory: "new_member", payerId: "mem-002", payerName: "Sneha Patel", payerMobile: "9800000002", payerEmail: "sneha.p@lotushomes.co", baseAmount: 1500, cgst: 135, sgst: 135, totalGst: 270, totalAmount: 1770, status: "success" },
+            { id: "pay-108", invoiceNo: `CREA/${fy}/TRN1/0008`, serial: 8, date: "2026-09-06T15:45:00.000Z", headId: "head-trn1", headCode: "TRN1", headTitle: "Masterclass: RERA Compliance, Title Verification & Escrows", payerType: "non_member", payerCategory: "non_member", payerId: null, payerName: "Deepak Mehra", payerMobile: "9820011223", payerEmail: "deepak@mehraproperty.com", baseAmount: 2500, cgst: 225, sgst: 225, totalGst: 450, totalAmount: 2950, status: "success" },
+            { id: "pay-109", invoiceNo: `CREA/${fy}/TRN2/0009`, serial: 9, date: "2026-09-12T11:20:00.000Z", headId: "head-trn2", headCode: "TRN2", headTitle: "Executive Training: Digital Lead Generation & NRI Client Acquisition", payerType: "member", payerCategory: "member", payerId: "mem-001", payerName: "Ramesh Gupta", payerMobile: "9800000001", payerEmail: "ramesh.gupta@crea-realty.in", baseAmount: 800, cgst: 72, sgst: 72, totalGst: 144, totalAmount: 944, status: "success" },
+            { id: "pay-110", invoiceNo: `CREA/${fy}/TRN2/0010`, serial: 10, date: "2026-09-15T17:10:00.000Z", headId: "head-trn2", headCode: "TRN2", headTitle: "Executive Training: Digital Lead Generation & NRI Client Acquisition", payerType: "non_member", payerCategory: "non_member", payerId: null, payerName: "Harish Bhatia", payerMobile: "9876543210", payerEmail: "harish@bhatiarealtors.in", baseAmount: 1800, cgst: 162, sgst: 162, totalGst: 324, totalAmount: 2124, status: "success" },
+            { id: "pay-111", invoiceNo: `CREA/${fy}/EVT1/0011`, serial: 11, date: "2026-09-22T14:00:00.000Z", headId: "head-evt1", headCode: "EVT1", headTitle: "CREA(I) Annual Realty Conclave & Networking Gala 2026", payerType: "member", payerCategory: "board_member", payerId: "mem-003", payerName: "Vikramaditya Rao", payerMobile: "9800000003", payerEmail: "v.rao@deccanproperties.com", baseAmount: 2000, cgst: 180, sgst: 180, totalGst: 360, totalAmount: 2360, status: "success" },
+            { id: "pay-112", invoiceNo: `CREA/${fy}/EVT1/0012`, serial: 12, date: "2026-09-28T18:30:00.000Z", headId: "head-evt1", headCode: "EVT1", headTitle: "CREA(I) Annual Realty Conclave & Networking Gala 2026", payerType: "member", payerCategory: "member", payerId: "mem-001", payerName: "Ramesh Gupta", payerMobile: "9800000001", payerEmail: "ramesh.gupta@crea-realty.in", baseAmount: 2800, cgst: 252, sgst: 252, totalGst: 504, totalAmount: 3304, status: "success" },
+            { id: "pay-113", invoiceNo: `CREA/${fy}/EVT1/0013`, serial: 13, date: "2026-10-02T10:45:00.000Z", headId: "head-evt1", headCode: "EVT1", headTitle: "CREA(I) Annual Realty Conclave & Networking Gala 2026", payerType: "non_member", payerCategory: "non_member", payerId: null, payerName: "Pooja Venkatesh", payerMobile: "9900112233", payerEmail: "pooja.v@greenviewbuilders.com", baseAmount: 5000, cgst: 450, sgst: 450, totalGst: 900, totalAmount: 5900, status: "success" },
+            { id: "pay-114", invoiceNo: `CREA/${fy}/TRN2/0014`, serial: 14, date: "2026-10-10T16:20:00.000Z", headId: "head-trn2", headCode: "TRN2", headTitle: "Executive Training: Digital Lead Generation & NRI Client Acquisition", payerType: "member", payerCategory: "new_member", payerId: "mem-005", payerName: "Kavita Reddy", payerMobile: "9711288901", payerEmail: "kavita.r@reddyrealty.in", baseAmount: 1000, cgst: 90, sgst: 90, totalGst: 180, totalAmount: 1180, status: "success" }
+          ],
+          emailLogs: [
+            { id: "log-1", timestamp: "2026-08-05T10:15:02.000Z", recipient: "ramesh.gupta@crea-realty.in", recipientName: "Ramesh Gupta", subject: `CREA(I) Tax Invoice CREA/${fy}/MEM/0001 - Annual Membership 2026-2027`, invoiceNo: `CREA/${fy}/MEM/0001`, amount: 11800, status: "Dispatched (Simulated SMTP)" },
+            { id: "log-14", timestamp: "2026-10-10T16:20:05.000Z", recipient: "kavita.r@reddyrealty.in", recipientName: "Kavita Reddy", subject: `CREA(I) Tax Invoice CREA/${fy}/TRN2/0014 - Executive Training`, invoiceNo: `CREA/${fy}/TRN2/0014`, amount: 1180, status: "Dispatched (Simulated SMTP)" }
+          ]
+        };
+      },
+
+      switchTab(tab) {
+        this.currentTab = tab;
+        document.querySelectorAll(".nav-btn").forEach(btn => btn.classList.remove("active"));
+        const btn = document.getElementById(`tab-btn-${tab}`);
+        if (btn) btn.classList.add("active");
+        this.render();
+      },
+
+      // TAB 1: MEMBER PORTAL
+      renderMemberPortal() {
+        if (!this.loggedInMember) {
+          return `
+            <div style="max-width: 480px; margin: 40px auto;" class="glass-card">
+              <div style="text-align: center; margin-bottom: 24px;">
+                <div style="width: 50px; height: 50px; border-radius: 12px; background: rgba(37, 99, 235, 0.2); border: 1px solid rgba(56, 189, 248, 0.3); display: inline-flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 12px;">
+                  👤
+                </div>
+                <h2 style="font-size: 22px; font-weight: 700;">CREA Member Sign-In</h2>
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Enter your registered mobile number or email address</p>
+              </div>
+
+              <!-- Quick Demo Accounts -->
+              <div style="background: #090f1e; border: 1px solid var(--card-border); border-radius: 10px; padding: 12px 14px; margin-bottom: 20px;">
+                <div style="font-size: 11.5px; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 8px;">
+                  ⚡ Quick Demo Login (Click to Autologin):
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <button onclick="app.loginDemo('9800000001')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500;">
+                    <span>Ramesh Gupta (Regular Member)</span>
+                    <span class="badge badge-member">9800000001</span>
+                  </button>
+                  <button onclick="app.loginDemo('9800000002')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500;">
+                    <span>Sneha Patel (New Member)</span>
+                    <span class="badge badge-new_member">9800000002</span>
+                  </button>
+                  <button onclick="app.loginDemo('9800000003')" class="btn btn-secondary btn-sm" style="justify-content: space-between; font-weight: 500;">
+                    <span>Vikramaditya Rao (Board Member)</span>
+                    <span class="badge badge-board_member">9800000003</span>
+                  </button>
+                </div>
+              </div>
+
+              <form onsubmit="app.handleMemberLogin(event)">
+                <div class="form-group">
+                  <label class="form-label">Registered Mobile Number or Email</label>
+                  <input type="text" id="member-login-input" required placeholder="e.g. 9800000001 or name@crea.in" class="form-input">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                  Sign In to Member Portal →
+                </button>
+              </form>
+            </div>
+          `;
+        }
+
+        // Member is logged in
+        const member = this.loggedInMember;
+        const now = new Date();
+
+        // Heads visible to this member's category
+        const visibleHeads = this.data.heads.filter(h => {
+          const price = h.prices[member.category];
+          return price !== null && price !== undefined;
+        });
+
+        // Map payments for this member
+        const memberPayments = this.data.payments.filter(p => p.payerId === member.id || p.payerMobile === member.mobile);
+
+        return `
+          <!-- Member Greeting Card -->
+          <div class="glass-card" style="margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+            <div style="display: flex; align-items: center; gap: 16px;">
+              <div style="width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: #fff;">
+                ${member.name.charAt(0)}
+              </div>
+              <div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <h2 style="font-size: 20px; font-weight: 700;">${member.name}</h2>
+                  <span class="badge badge-${member.category}">${member.category.replace('_', ' ')}</span>
+                </div>
+                <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+                  🏢 ${member.company || 'CREA Associate'} • 📞 +91 ${member.mobile} • ✉️ ${member.email}
+                </div>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+              <button onclick="app.logoutMember()" class="btn btn-secondary btn-sm">
+                Sign Out
+              </button>
+            </div>
+          </div>
+
+          <!-- Section Title -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <div>
+              <h3 style="font-size: 18px; font-weight: 700;">Open Registrations & Payment Heads</h3>
+              <p style="font-size: 13px; color: var(--text-muted);">Pricing shown according to your <strong>${member.category.replace('_', ' ').toUpperCase()}</strong> accreditation (18% GST added at payment).</p>
+            </div>
+            <span style="font-size: 12px; color: var(--text-dim);">${visibleHeads.length} Available Programs</span>
+          </div>
+
+          <!-- Heads Grid -->
+          <div class="heads-grid">
+            ${visibleHeads.map(h => {
+              const basePrice = h.prices[member.category];
+              const cgst = Math.round(basePrice * 0.09 * 100) / 100;
+              const sgst = Math.round(basePrice * 0.09 * 100) / 100;
+              const totalAmount = Math.round((basePrice + cgst + sgst) * 100) / 100;
+
+              const isPaid = memberPayments.find(p => p.headId === h.id || p.headCode === h.code);
+              const isExpired = h.activeUntil && new Date(h.activeUntil) < now;
+              const isDeactivated = h.status === 'deactivated' || h.status === 'inactive';
+
+              return `
+                <div class="head-card" style="${isDeactivated ? 'border-color: rgba(239, 68, 68, 0.35); opacity: 0.9;' : ''}">
+                  <div>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                      <span class="badge badge-open">${h.code} • ${h.type.toUpperCase()}</span>
+                      ${isPaid ? `<span class="badge badge-paid">✓ PAID</span>` : isDeactivated ? `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">⏸ DEACTIVATED</span>` : isExpired ? `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">EXPIRED</span>` : `<span class="badge badge-open">OPEN</span>`}
+                    </div>
+
+                    <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 10px; color: #ffffff; line-height: 1.4;">
+                      ${h.title}
+                    </h4>
+
+                    <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
+                      <div>📅 <strong>Date:</strong> ${h.eventDate} (${h.eventTime})</div>
+                      <div>📍 <strong>Venue:</strong> ${h.venue}</div>
+                      <div>⏳ <strong>Closes:</strong> ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                    </div>
+
+                    ${isDeactivated ? `
+                      <div style="background: rgba(239, 68, 68, 0.08); border: 1px dashed rgba(239, 68, 68, 0.35); border-radius: 6px; padding: 6px 10px; font-size: 11.5px; color: #fca5a5; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                        <span>⏸</span> <span>This program is temporarily deactivated by administration. Registrations are paused.</span>
+                      </div>
+                    ` : ''}
+                  </div>
+
+                  <div style="border-top: 1px solid var(--card-border); padding-top: 16px;">
+                    <!-- Price Breakdown Box -->
+                    <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px;">
+                      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="color: var(--text-muted);">Base Fee (excl. GST):</span>
+                        <span style="color: #ffffff; font-weight: 600;">₹${basePrice.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="color: var(--text-muted);">GST (18% - CGST 9% + SGST 9%):</span>
+                        <span style="color: #38bdf8; font-weight: 600;">+₹${(cgst + sgst).toLocaleString('en-IN')}</span>
+                      </div>
+                      <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; border-top: 1px solid #1e293b; padding-top: 4px; color: #ffffff;">
+                        <span>Total Payable:</span>
+                        <span style="color: #34d399;">₹${totalAmount.toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+
+                    <div style="display: flex; gap: 8px;">
+                      <button onclick="app.showHeadDetails('${h.id}')" class="btn btn-secondary btn-sm" style="flex: 1;">
+                        📄 Event Details
+                      </button>
+
+                      ${isPaid ? `
+                        <button onclick="app.viewInvoice('${isPaid.invoiceNo}')" class="btn btn-success btn-sm" style="flex: 1.5;">
+                          ✓ Invoice ${isPaid.invoiceNo.split('/').slice(-2).join('/')}
+                        </button>
+                      ` : isDeactivated ? `
+                        <button disabled class="btn btn-secondary btn-sm" style="flex: 1.5; opacity: 0.6; cursor: not-allowed; background: #1e293b; color: #94a3b8;" title="Registrations paused by administration">
+                          ⏸ Deactivated
+                        </button>
+                      ` : isExpired ? `
+                        <button disabled class="btn btn-secondary btn-sm" style="flex: 1.5; opacity: 0.5; cursor: not-allowed;">
+                          Registration Closed
+                        </button>
+                      ` : `
+                        <button onclick="app.openPaymentModal('${h.id}', 'member')" class="btn btn-primary btn-sm" style="flex: 1.5;">
+                          Pay ₹${totalAmount.toLocaleString('en-IN')} →
+                        </button>
+                      `}
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      },
+
+      // TAB 2: NON-MEMBER (GUEST) CHECKOUT
+      renderGuestPortal() {
+        const now = new Date();
+        const nonMemberHeads = this.data.heads.filter(h => h.prices.non_member !== null && h.prices.non_member !== undefined);
+
+        return `
+          <div style="margin-bottom: 28px;">
+            <div class="glass-card" style="border-left: 4px solid var(--gold);">
+              <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">
+                Non-Member & Guest Registration Portal
+              </h2>
+              <p style="font-size: 13.5px; color: var(--text-muted); line-height: 1.5;">
+                Welcome to CREA(I). Non-member real estate professionals, independent brokers, and guests can register for open trainings and conclaves below. Enter your contact details to generate your GST tax invoice.
+              </p>
+
+              <!-- Guest Contact Details Form -->
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 18px; background: #090f1e; padding: 16px; border-radius: 10px; border: 1px solid var(--card-border);">
+                <div>
+                  <label class="form-label">Full Name *</label>
+                  <input type="text" id="guest-name" value="${this.guestInfo.name}" oninput="app.guestInfo.name = this.value" placeholder="e.g. Siddharth Joshi" class="form-input">
+                </div>
+                <div>
+                  <label class="form-label">Mobile Number *</label>
+                  <input type="text" id="guest-mobile" value="${this.guestInfo.mobile}" oninput="app.guestInfo.mobile = this.value" placeholder="e.g. 9845112233" class="form-input">
+                </div>
+                <div>
+                  <label class="form-label">Email Address (for Invoice) *</label>
+                  <input type="email" id="guest-email" value="${this.guestInfo.email}" oninput="app.guestInfo.email = this.value" placeholder="e.g. sid@urbanestates.in" class="form-input">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 16px;">
+            Programs Open to Non-Members
+          </h3>
+
+          <div class="heads-grid">
+            ${nonMemberHeads.map(h => {
+              const basePrice = h.prices.non_member;
+              const cgst = Math.round(basePrice * 0.09 * 100) / 100;
+              const sgst = Math.round(basePrice * 0.09 * 100) / 100;
+              const totalAmount = Math.round((basePrice + cgst + sgst) * 100) / 100;
+              const isExpired = h.activeUntil && new Date(h.activeUntil) < now;
+              const isDeactivated = h.status === 'deactivated' || h.status === 'inactive';
+
+              return `
+                <div class="head-card" style="${isDeactivated ? 'border-color: rgba(239, 68, 68, 0.35); opacity: 0.9;' : ''}">
+                  <div>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                      <span class="badge badge-non_member">${h.code} • ${h.type.toUpperCase()}</span>
+                      ${isDeactivated ? `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">⏸ DEACTIVATED</span>` : isExpired ? `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">EXPIRED</span>` : `<span class="badge badge-open">GUEST SEATS OPEN</span>`}
+                    </div>
+
+                    <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 10px; color: #ffffff; line-height: 1.4;">
+                      ${h.title}
+                    </h4>
+
+                    <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
+                      <div>📅 <strong>Date:</strong> ${h.eventDate} (${h.eventTime})</div>
+                      <div>📍 <strong>Venue:</strong> ${h.venue}</div>
+                      <div>⏳ <strong>Closes:</strong> ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                    </div>
+
+                    ${isDeactivated ? `
+                      <div style="background: rgba(239, 68, 68, 0.08); border: 1px dashed rgba(239, 68, 68, 0.35); border-radius: 6px; padding: 6px 10px; font-size: 11.5px; color: #fca5a5; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                        <span>⏸</span> <span>This program is temporarily deactivated by administration. Registrations are paused.</span>
+                      </div>
+                    ` : ''}
+                  </div>
+
+                  <div style="border-top: 1px solid var(--card-border); padding-top: 16px;">
+                    <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px;">
+                      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="color: var(--text-muted);">Guest Fee (excl. GST):</span>
+                        <span style="color: #ffffff; font-weight: 600;">₹${basePrice.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="color: var(--text-muted);">GST (18% - CGST 9% + SGST 9%):</span>
+                        <span style="color: #38bdf8; font-weight: 600;">+₹${(cgst + sgst).toLocaleString('en-IN')}</span>
+                      </div>
+                      <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; border-top: 1px solid #1e293b; padding-top: 4px; color: #ffffff;">
+                        <span>Total Payable:</span>
+                        <span style="color: #34d399;">₹${totalAmount.toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+
+                    <div style="display: flex; gap: 8px;">
+                      <button onclick="app.showHeadDetails('${h.id}')" class="btn btn-secondary btn-sm" style="flex: 1;">
+                        📄 Details
+                      </button>
+                      ${isDeactivated ? `
+                        <button disabled class="btn btn-secondary btn-sm" style="flex: 1.5; opacity: 0.6; cursor: not-allowed; background: #1e293b; color: #94a3b8;" title="Registrations paused by administration">
+                          ⏸ Deactivated
+                        </button>
+                      ` : `
+                        <button onclick="app.openPaymentModal('${h.id}', 'guest')" class="btn btn-primary btn-sm" style="flex: 1.5;" ${isExpired ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+                          ${isExpired ? 'Registration Closed' : `Pay ₹${totalAmount.toLocaleString('en-IN')} →`}
+                        </button>
+                      `}
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      },
+
+      // TAB 3: ADMIN PORTAL
+      renderAdminPortal() {
+        if (!this.isAdminAuthenticated) {
+          return `
+            <div style="max-width: 440px; margin: 60px auto;" class="glass-card">
+              <div style="text-align: center; margin-bottom: 24px;">
+                <div style="width: 52px; height: 52px; border-radius: 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); display: inline-flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 12px;">
+                  🛡️
+                </div>
+                <h2 style="font-size: 20px; font-weight: 700;">Admin Authentication</h2>
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Enter the CREA(I) administrator secret PIN</p>
+              </div>
+
+              <div style="background: #090f1e; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: var(--text-muted);">
+                Authorized Trial PIN: <strong style="color: #38bdf8;">crea-admin</strong>
+              </div>
+
+              <form onsubmit="app.handleAdminLogin(event)">
+                <div class="form-group">
+                  <label class="form-label">Admin Secret PIN</label>
+                  <input type="password" id="admin-pin-input" required placeholder="Enter PIN" class="form-input">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                  Access Management Dashboard →
+                </button>
+              </form>
+            </div>
+          `;
+        }
+
+        // Admin is Authenticated
+        const payments = this.data.payments;
+        const totalGross = payments.reduce((acc, p) => acc + p.totalAmount, 0);
+        const totalBase = payments.reduce((acc, p) => acc + p.baseAmount, 0);
+        const totalGst = payments.reduce((acc, p) => acc + p.totalGst, 0);
+        const memberCount = payments.filter(p => p.payerType === 'member').length;
+        const memberRev = payments.filter(p => p.payerType === 'member').reduce((acc, p) => acc + p.totalAmount, 0);
+        const guestCount = payments.filter(p => p.payerType === 'non_member').length;
+        const guestRev = payments.filter(p => p.payerType === 'non_member').reduce((acc, p) => acc + p.totalAmount, 0);
+
+        // Filtered Payments
+        const filteredPayments = payments.filter(p => {
+          if (this.adminFilter.head !== 'all' && p.headCode !== this.adminFilter.head) return false;
+          if (this.adminFilter.type !== 'all' && p.payerType !== this.adminFilter.type) return false;
+          if (this.adminFilter.search) {
+            const q = this.adminFilter.search.toLowerCase();
+            const matchName = p.payerName && p.payerName.toLowerCase().includes(q);
+            const matchInv = p.invoiceNo && p.invoiceNo.toLowerCase().includes(q);
+            const matchMob = p.payerMobile && p.payerMobile.includes(q);
+            const matchHead = p.headCode && p.headCode.toLowerCase().includes(q);
+            const matchTitle = p.headTitle && p.headTitle.toLowerCase().includes(q);
+            if (!matchName && !matchInv && !matchMob && !matchHead && !matchTitle) return false;
+          }
+          return true;
+        });
+
+        // Dynamic Aggregations of the Filtered Set
+        const filteredCount = filteredPayments.length;
+        const filteredBase = filteredPayments.reduce((acc, p) => acc + (p.baseAmount || 0), 0);
+        const filteredGst = filteredPayments.reduce((acc, p) => acc + (p.totalGst || 0), 0);
+        const filteredGross = filteredPayments.reduce((acc, p) => acc + (p.totalAmount || 0), 0);
+        const filteredMems = filteredPayments.filter(p => p.payerType === 'member').length;
+        const filteredGuests = filteredPayments.filter(p => p.payerType === 'non_member').length;
+
+        // Group filtered payments by head to calculate dynamic head-wise totals
+        const headTotals = {};
+        filteredPayments.forEach(p => {
+          const code = p.headCode || 'OTHER';
+          if (!headTotals[code]) {
+            headTotals[code] = {
+              code,
+              title: p.headTitle || code,
+              count: 0,
+              base: 0,
+              gst: 0,
+              gross: 0,
+              mems: 0,
+              guests: 0
+            };
+          }
+          headTotals[code].count += 1;
+          headTotals[code].base += (p.baseAmount || 0);
+          headTotals[code].gst += (p.totalGst || 0);
+          headTotals[code].gross += (p.totalAmount || 0);
+          if (p.payerType === 'member') headTotals[code].mems += 1;
+          else headTotals[code].guests += 1;
+        });
+        const filteredHeadList = Object.values(headTotals);
+
+        return `
+          <!-- Admin Action Bar -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 14px;">
+            <div>
+              <h2 style="font-size: 22px; font-weight: 800; display: flex; align-items: center; gap: 10px;">
+                <span>CREA(I) Administrator Console</span>
+                <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">LIVE BACKEND</span>
+              </h2>
+              <p style="font-size: 13px; color: var(--text-muted);">Real-time collections, discriminatory heads, member registry & invoice ledger.</p>
+            </div>
+
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <button onclick="app.openNewHeadModal()" class="btn btn-primary btn-sm">
+                + Create Payment Head
+              </button>
+              <button onclick="app.openMembersModal()" class="btn btn-secondary btn-sm">
+                👥 Manage Members (${this.data.members.length})
+              </button>
+              <button onclick="app.triggerYearlyRenewal()" class="btn btn-outline btn-sm">
+                🔄 Activate 1-Click Renewal
+              </button>
+              <button onclick="app.exportCSV()" class="btn btn-secondary btn-sm">
+                📥 Export CSV
+              </button>
+              <button onclick="app.simulatePayments()" class="btn btn-secondary btn-sm" title="Add 10 test payments">
+                ⚡ Simulate 10
+              </button>
+              <button onclick="app.resetAllPayments()" class="btn btn-secondary btn-sm" style="color: #f87171;" title="Wipe all payments & reset invoice counter to 0001">
+                🗑️ Reset All
+              </button>
+              <button onclick="app.logoutAdmin()" class="btn btn-secondary btn-sm">
+                Lock Admin
+              </button>
+            </div>
+          </div>
+
+          <!-- 4 KPI Stat Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; margin-bottom: 28px;">
+            <div class="glass-card" style="border-top: 3px solid #38bdf8;">
+              <div style="font-size: 12px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Total Collections (Gross)</div>
+              <div style="font-size: 28px; font-weight: 800; color: #ffffff; margin-top: 4px;">₹${totalGross.toLocaleString('en-IN')}</div>
+              <div style="font-size: 11.5px; color: #38bdf8; margin-top: 4px;">Across ${payments.length} verified transactions</div>
+            </div>
+
+            <div class="glass-card" style="border-top: 3px solid #34d399;">
+              <div style="font-size: 12px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Base Value (Taxable)</div>
+              <div style="font-size: 28px; font-weight: 800; color: #34d399; margin-top: 4px;">₹${totalBase.toLocaleString('en-IN')}</div>
+              <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 4px;">Excludes GST component</div>
+            </div>
+
+            <div class="glass-card" style="border-top: 3px solid #f59e0b;">
+              <div style="font-size: 12px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">18% GST Collected</div>
+              <div style="font-size: 28px; font-weight: 800; color: #fbbf24; margin-top: 4px;">₹${totalGst.toLocaleString('en-IN')}</div>
+              <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 4px;">CGST 9% (₹${(totalGst/2).toLocaleString('en-IN')}) + SGST 9%</div>
+            </div>
+
+            <div class="glass-card" style="border-top: 3px solid #a855f7;">
+              <div style="font-size: 12px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Members vs Non-Members</div>
+              <div style="font-size: 18px; font-weight: 700; color: #ffffff; margin-top: 8px;">
+                ${memberCount} Members <span style="font-size: 13px; color: #38bdf8;">(₹${memberRev.toLocaleString('en-IN')})</span>
+              </div>
+              <div style="font-size: 13.5px; color: var(--text-muted); margin-top: 4px;">
+                ${guestCount} Guests <span style="font-size: 12px; color: #fcd34d;">(₹${guestRev.toLocaleString('en-IN')})</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Head-wise Management & Registrations -->
+          <div class="glass-card" style="margin-bottom: 28px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+              <div>
+                <h3 style="font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 10px;">
+                  <span>⚙️ Program, Training & Membership Management (Payment Heads)</span>
+                  <span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">
+                    ${this.data.heads.length} Programs
+                  </span>
+                </h3>
+                <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 3px;">
+                  Modify program names, extend registration cutoff dates, increase/decrease tiered prices, and toggle active/deactivate status.
+                </p>
+              </div>
+              <button onclick="app.openNewHeadModal()" class="btn btn-primary btn-sm">
+                + Create New Head
+              </button>
+            </div>
+
+            <div style="overflow-x: auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="min-width: 250px;">Program / Training / Membership</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th style="min-width: 210px;">Configured Prices (excl. GST)</th>
+                    <th>Registrations</th>
+                    <th>Total Gross (incl. 18%)</th>
+                    <th style="min-width: 190px; text-align: center;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${this.data.heads.map(h => {
+                    const hPays = payments.filter(p => p.headId === h.id || p.headCode === h.code);
+                    const mems = hPays.filter(p => p.payerType === 'member');
+                    const guests = hPays.filter(p => p.payerType === 'non_member');
+                    const gross = hPays.reduce((acc, p) => acc + p.totalAmount, 0);
+                    const isDeactivated = h.status === 'deactivated' || h.status === 'inactive';
+                    const isExpired = h.activeUntil && new Date(h.activeUntil) < new Date();
+
+                    const pNew = h.prices?.new_member != null ? `₹${Number(h.prices.new_member).toLocaleString('en-IN')}` : '-';
+                    const pMem = h.prices?.member != null ? `₹${Number(h.prices.member).toLocaleString('en-IN')}` : '-';
+                    const pBrd = h.prices?.board_member != null ? `₹${Number(h.prices.board_member).toLocaleString('en-IN')}` : '-';
+                    const pGst = h.prices?.non_member != null ? `₹${Number(h.prices.non_member).toLocaleString('en-IN')}` : '<span style="color: var(--text-dim);">Restricted</span>';
+
+                    return `
+                      <tr style="${isDeactivated ? 'background: rgba(239, 68, 68, 0.04);' : ''}">
+                        <td>
+                          <div>
+                            <strong style="color: ${isDeactivated ? '#cbd5e1' : '#ffffff'}; font-size: 13.5px;">${h.title}</strong>
+                            <div style="font-size: 11px; color: #38bdf8; margin-top: 3px;">
+                              Code: <strong>${h.code}</strong> • Event: ${h.eventDate || 'N/A'} • Closes: ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </div>
+                          </div>
+                        </td>
+                        <td><span class="badge badge-open">${h.type.toUpperCase()}</span></td>
+                        <td>
+                          ${isDeactivated ? `
+                            <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">
+                              ⏸ DEACTIVATED
+                            </span>
+                          ` : isExpired ? `
+                            <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">
+                              ⌛ EXPIRED
+                            </span>
+                          ` : `
+                            <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);">
+                              ● ACTIVE
+                            </span>
+                          `}
+                        </td>
+                        <td style="font-size: 11.5px; line-height: 1.5;">
+                          <div><span style="color: var(--text-dim);">New Mem:</span> <strong style="color: #fbbf24;">${pNew}</strong></div>
+                          <div><span style="color: var(--text-dim);">Reg Mem:</span> <strong style="color: #38bdf8;">${pMem}</strong></div>
+                          <div><span style="color: var(--text-dim);">Board:</span> <strong style="color: #c084fc;">${pBrd}</strong></div>
+                          <div><span style="color: var(--text-dim);">Guest:</span> <strong>${pGst}</strong></div>
+                        </td>
+                        <td>
+                          <strong>${hPays.length}</strong>
+                          <div style="font-size: 11px; color: var(--text-muted);">${mems.length} Mems / ${guests.length} Guests</div>
+                        </td>
+                        <td style="color: #34d399; font-weight: 700; font-size: 13.5px;">₹${gross.toLocaleString('en-IN')}</td>
+                        <td style="text-align: center;">
+                          <div style="display: inline-flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap;">
+                            <button onclick="app.openEditHeadModal('${h.id}')" class="btn btn-outline btn-sm" style="padding: 5px 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;" title="Modify title, extend dates, increase/decrease prices">
+                              ✏️ Modify
+                            </button>
+                            ${isDeactivated ? `
+                              <button onclick="app.toggleHeadStatus('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 5px 10px; font-size: 12px; color: #34d399; border-color: rgba(16, 185, 129, 0.4); display: inline-flex; align-items: center; gap: 4px;" title="Reactivate this training or membership">
+                                ▶ Activate
+                              </button>
+                            ` : `
+                              <button onclick="app.toggleHeadStatus('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 5px 10px; font-size: 12px; color: #f87171; border-color: rgba(239, 68, 68, 0.4); display: inline-flex; align-items: center; gap: 4px;" title="Deactivate this training or membership (pauses new registrations)">
+                                ⏸ Deactivate
+                              </button>
+                            `}
+                          </div>
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Transactions Ledger with Filters & Dynamic Filtered Heads Totals -->
+          <div class="glass-card">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 14px;">
+              <div>
+                <h3 style="font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 10px;">
+                  <span>📑 Real-Time Tax Invoices & Payments Ledger</span>
+                  <span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">
+                    ${filteredCount} ${filteredCount === 1 ? 'Record' : 'Records'}
+                  </span>
+                </h3>
+                <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 3px;">
+                  Audit ledger with real-time dynamic totals based on the selected head & payer filters.
+                </p>
+              </div>
+
+              <!-- Filter Bar -->
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
+                <div>
+                  <label style="font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Filter Head:</label>
+                  <select class="form-select" style="width: auto; padding: 6px 12px; font-size: 12px;" onchange="app.adminFilter.head = this.value; app.render();">
+                    <option value="all">All Heads (${this.data.heads.length})</option>
+                    ${this.data.heads.map(h => `<option value="${h.code}" ${this.adminFilter.head === h.code ? 'selected' : ''}>${h.code} - ${h.title.slice(0, 26)}...</option>`).join('')}
+                  </select>
+                </div>
+
+                <div>
+                  <label style="font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Payer Type:</label>
+                  <select class="form-select" style="width: auto; padding: 6px 12px; font-size: 12px;" onchange="app.adminFilter.type = this.value; app.render();">
+                    <option value="all" ${this.adminFilter.type === 'all' ? 'selected' : ''}>All Payers</option>
+                    <option value="member" ${this.adminFilter.type === 'member' ? 'selected' : ''}>Members Only</option>
+                    <option value="non_member" ${this.adminFilter.type === 'non_member' ? 'selected' : ''}>Guests Only</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style="font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 3px;">Search:</label>
+                  <input type="text" placeholder="Search name, mobile, invoice..." value="${this.adminFilter.search}" oninput="app.adminFilter.search = this.value; app.render();" class="form-input" style="width: 190px; padding: 6px 10px; font-size: 12px;">
+                </div>
+
+                ${(this.adminFilter.head !== 'all' || this.adminFilter.type !== 'all' || this.adminFilter.search) ? `
+                  <button onclick="app.resetAdminFilter()" class="btn btn-secondary btn-sm" style="padding: 6px 10px; font-size: 12px; color: #f87171;" title="Clear all active filters">
+                    ✕ Reset Filter
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+
+            <!-- Dynamic Filtered Totals Highlight Strip -->
+            <div style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(24, 34, 53, 0.9) 100%); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 14px 18px; margin-bottom: 18px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 14px;">⚡</span>
+                  <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #38bdf8;">
+                    Live Filtered Totals Summary
+                  </span>
+                  ${(this.adminFilter.head !== 'all' || this.adminFilter.type !== 'all' || this.adminFilter.search) ? `
+                    <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">
+                      FILTER APPLIED (${this.adminFilter.head !== 'all' ? 'Head: ' + this.adminFilter.head : 'All Heads'}${this.adminFilter.type !== 'all' ? ' • ' + (this.adminFilter.type === 'member' ? 'Members' : 'Guests') : ''}${this.adminFilter.search ? ' • "' + this.adminFilter.search + '"' : ''})
+                    </span>
+                  ` : `
+                    <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);">
+                      ALL HEADS INCLUDED
+                    </span>
+                  `}
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted);">
+                  ${filteredCount} matching transaction${filteredCount === 1 ? '' : 's'} (${filteredMems} Members, ${filteredGuests} Guests)
+                </div>
+              </div>
+
+              <!-- 4 KPI Aggregate Metric Boxes -->
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px;">
+                <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 14px;">
+                  <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Filtered Head Count</div>
+                  <div style="font-size: 18px; font-weight: 700; color: #ffffff; margin-top: 2px;">
+                    ${filteredHeadList.length} <span style="font-size: 12px; color: var(--text-muted);">Head${filteredHeadList.length === 1 ? '' : 's'} (${filteredCount} Txns)</span>
+                  </div>
+                </div>
+
+                <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 14px;">
+                  <div style="font-size: 11px; color: #34d399; text-transform: uppercase; font-weight: 600;">Filtered Base (Taxable)</div>
+                  <div style="font-size: 18px; font-weight: 700; color: #34d399; margin-top: 2px;">
+                    ₹${filteredBase.toLocaleString('en-IN')}
+                  </div>
+                </div>
+
+                <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 14px;">
+                  <div style="font-size: 11px; color: #fbbf24; text-transform: uppercase; font-weight: 600;">Filtered 18% GST</div>
+                  <div style="font-size: 18px; font-weight: 700; color: #fbbf24; margin-top: 2px;">
+                    ₹${filteredGst.toLocaleString('en-IN')}
+                  </div>
+                </div>
+
+                <div style="background: #090f1d; border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 8px; padding: 10px 14px;">
+                  <div style="font-size: 11px; color: #38bdf8; text-transform: uppercase; font-weight: 600;">Total of Filtered Heads (Gross)</div>
+                  <div style="font-size: 20px; font-weight: 800; color: #38bdf8; margin-top: 2px;">
+                    ₹${filteredGross.toLocaleString('en-IN')}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Head-by-Head Breakdown of Filtered Results -->
+              ${filteredHeadList.length > 0 ? `
+                <div style="border-top: 1px dashed rgba(255, 255, 255, 0.1); padding-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <span style="font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase;">
+                    Total By Head in Filter:
+                  </span>
+                  ${filteredHeadList.map(h => `
+                    <div style="background: #0b1329; border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 6px; padding: 4px 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+                      <span class="badge badge-open" style="font-size: 10px; padding: 1px 6px;">${h.code}</span>
+                      <strong style="color: #38bdf8;">₹${h.gross.toLocaleString('en-IN')}</strong>
+                      <span style="color: var(--text-muted); font-size: 11px;">(${h.count} txn${h.count > 1 ? 's' : ''} • Base: ₹${h.base.toLocaleString('en-IN')} + GST: ₹${h.gst.toLocaleString('en-IN')})</span>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : `
+                <div style="font-size: 12px; color: var(--text-muted); padding-top: 6px;">
+                  No transactions match the selected filter criteria.
+                </div>
+              `}
+            </div>
+
+            <div style="overflow-x: auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Invoice Number</th>
+                    <th>Date & Time</th>
+                    <th>Payer Name</th>
+                    <th>Category</th>
+                    <th>Program Head</th>
+                    <th>Base (₹)</th>
+                    <th>18% GST (₹)</th>
+                    <th>Total Paid</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${filteredPayments.length === 0 ? `
+                    <tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 30px;">No payments match the selected criteria.</td></tr>
+                  ` : filteredPayments.map(p => `
+                    <tr>
+                      <td><strong style="color: #38bdf8;">${p.invoiceNo}</strong></td>
+                      <td style="font-size: 11.5px; color: var(--text-muted);">${new Date(p.date).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
+                      <td>
+                        <strong>${p.payerName}</strong>
+                        <div style="font-size: 11px; color: var(--text-dim);">${p.payerMobile}</div>
+                      </td>
+                      <td><span class="badge badge-${p.payerCategory}">${p.payerCategory.replace('_', ' ')}</span></td>
+                      <td><strong>${p.headCode}</strong></td>
+                      <td>₹${p.baseAmount.toLocaleString('en-IN')}</td>
+                      <td style="color: #fbbf24;">₹${p.totalGst.toLocaleString('en-IN')}</td>
+                      <td style="color: #34d399; font-weight: 700;">₹${p.totalAmount.toLocaleString('en-IN')}</td>
+                      <td>
+                        <button onclick="app.viewInvoice('${p.invoiceNo}')" class="btn btn-outline btn-sm" style="padding: 4px 8px;">
+                          View / Print
+                        </button>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+                <tfoot>
+                  <tr style="background: #090f1d; border-top: 2px solid #38bdf8; border-bottom: 2px solid #38bdf8;">
+                    <td colspan="5" style="padding: 14px; font-weight: 800; color: #ffffff;">
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="color: #38bdf8; font-size: 16px;">Σ</span>
+                        <span>TOTAL OF FILTERED HEADS (${filteredCount} Transaction${filteredCount === 1 ? '' : 's'})</span>
+                        ${(this.adminFilter.head !== 'all' || this.adminFilter.type !== 'all' || this.adminFilter.search) ? `
+                          <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">FILTERED</span>
+                        ` : `
+                          <span class="badge" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4);">ALL HEADS</span>
+                        `}
+                      </div>
+                    </td>
+                    <td style="padding: 14px; font-weight: 800; color: #34d399; font-size: 14px;">
+                      ₹${filteredBase.toLocaleString('en-IN')}
+                    </td>
+                    <td style="padding: 14px; font-weight: 800; color: #fbbf24; font-size: 14px;">
+                      ₹${filteredGst.toLocaleString('en-IN')}
+                    </td>
+                    <td style="padding: 14px; font-weight: 800; color: #38bdf8; font-size: 15px;">
+                      ₹${filteredGross.toLocaleString('en-IN')}
+                    </td>
+                    <td style="padding: 14px; text-align: center; color: var(--text-dim); font-size: 12px;">
+                      -
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        `;
+      },
+
+      render() {
+        const viewport = document.getElementById("app-viewport");
+        if (this.currentTab === "member") {
+          viewport.innerHTML = this.renderMemberPortal();
+        } else if (this.currentTab === "guest") {
+          viewport.innerHTML = this.renderGuestPortal();
+        } else if (this.currentTab === "admin") {
+          viewport.innerHTML = this.renderAdminPortal();
+        }
+      },
+
+      // ACTIONS & MODALS
+      handleMemberLogin(e) {
+        e.preventDefault();
+        const input = document.getElementById("member-login-input").value.trim().toLowerCase();
+        const member = this.data.members.find(m => m.mobile === input || m.email.toLowerCase() === input);
+
+        if (!member) {
+          alert(`Account not found for "${input}". You can use demo numbers 9800000001, 9800000002, or 9800000003.`);
+          return;
+        }
+
+        this.loggedInMember = member;
+        localStorage.setItem("crea_member", JSON.stringify(member));
+        this.render();
+      },
+
+      loginDemo(mobile) {
+        const member = this.data.members.find(m => m.mobile === mobile);
+        if (member) {
+          this.loggedInMember = member;
+          localStorage.setItem("crea_member", JSON.stringify(member));
+          this.render();
+        }
+      },
+
+      logoutMember() {
+        this.loggedInMember = null;
+        localStorage.removeItem("crea_member");
+        this.render();
+      },
+
+      handleAdminLogin(e) {
+        e.preventDefault();
+        const pin = document.getElementById("admin-pin-input").value.trim();
+        if (pin === this.adminPin) {
+          this.isAdminAuthenticated = true;
+          this.render();
+        } else {
+          alert("Invalid Admin PIN. (Hint: crea-admin)");
+        }
+      },
+
+      logoutAdmin() {
+        this.isAdminAuthenticated = false;
+        this.render();
+      },
+
+      resetAdminFilter() {
+        this.adminFilter = {
+          head: "all",
+          type: "all",
+          fromMonth: "2026-08",
+          toMonth: "2026-12",
+          search: ""
+        };
+        this.render();
+      },
+
+      // SHOW HEAD WRITEUP MODAL (500 Words)
+      showHeadDetails(headId) {
+        const head = this.data.heads.find(h => h.id === headId);
+        if (!head) return;
+
+        const words = (head.writeup || '').trim().split(/\s+/).filter(Boolean).length;
+
+        document.getElementById("modal-root").innerHTML = `
+          <div class="modal-overlay" onclick="app.closeModal(event)">
+            <div class="modal-box" onclick="event.stopPropagation()">
+              <div class="modal-header">
+                <div>
+                  <span class="badge badge-open">${head.code} • ${head.type.toUpperCase()}</span>
+                  <h3 style="font-size: 18px; font-weight: 700; margin-top: 6px;">${head.title}</h3>
+                </div>
+                <button class="modal-close" onclick="app.closeModal()">&times;</button>
+              </div>
+
+              <div style="background: #090f1e; border: 1px solid var(--card-border); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 12.5px; line-height: 1.6;">
+                <div>📅 <strong>Program Schedule:</strong> ${head.eventDate} (${head.eventTime})</div>
+                <div>📍 <strong>Venue Location:</strong> ${head.venue}</div>
+                <div>⏳ <strong>Registration Cutoff:</strong> ${new Date(head.activeUntil).toLocaleString('en-IN')}</div>
+              </div>
+
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h4 style="font-size: 13.5px; font-weight: 700; color: #ffffff;">About This Event / Masterclass</h4>
+                <span style="font-size: 11px; color: var(--text-dim);">${words} words</span>
+              </div>
+
+              <div style="font-size: 13px; color: #cbd5e1; line-height: 1.7; white-space: pre-wrap; background: #080c17; border: 1px solid #1a2538; border-radius: 8px; padding: 14px; max-height: 350px; overflow-y: auto;">
+${head.writeup || 'No detailed write-up provided.'}
+              </div>
+
+              <div style="margin-top: 20px; text-align: right;">
+                <button onclick="app.closeModal()" class="btn btn-secondary btn-sm">Close</button>
+              </div>
+            </div>
+          </div>
+        `;
+      },
+
+      // PAYMENT MODAL (WITH 18% GST BREAKDOWN)
+      openPaymentModal(headId, mode) {
+        const head = this.data.heads.find(h => h.id === headId);
+        if (!head) return;
+
+        if (head.status === 'deactivated' || head.status === 'inactive') {
+          alert(`"${head.title}" has been deactivated by administration and cannot accept registrations.`);
+          return;
+        }
+
+        let payerName, payerMobile, payerEmail, payerCategory, payerType, payerId;
+
+        if (mode === "member") {
+          if (!this.loggedInMember) {
+            alert("Please sign in as a member first.");
+            return;
+          }
+          payerName = this.loggedInMember.name;
+          payerMobile = this.loggedInMember.mobile;
+          payerEmail = this.loggedInMember.email;
+          payerCategory = this.loggedInMember.category;
+          payerType = "member";
+          payerId = this.loggedInMember.id;
+        } else {
+          // Guest Mode
+          payerName = this.guestInfo.name.trim();
+          payerMobile = this.guestInfo.mobile.trim();
+          payerEmail = this.guestInfo.email.trim();
+          payerCategory = "non_member";
+          payerType = "non_member";
+          payerId = null;
+
+          if (!payerName || !payerMobile || !payerEmail) {
+            alert("Please enter your Full Name, Mobile Number, and Email Address in the guest form before making a payment.");
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+          }
+        }
+
+        const basePrice = head.prices[payerCategory];
+        if (basePrice === null || basePrice === undefined) {
+          alert("This payment head is not available for this category.");
+          return;
+        }
+
+        const base = Number(basePrice);
+        const cgst = Math.round(base * 0.09 * 100) / 100;
+        const sgst = Math.round(base * 0.09 * 100) / 100;
+        const totalGst = Math.round((cgst + sgst) * 100) / 100;
+        const totalAmount = Math.round((base + totalGst) * 100) / 100;
+
+        document.getElementById("modal-root").innerHTML = `
+          <div class="modal-overlay" onclick="app.closeModal(event)">
+            <div class="modal-box" onclick="event.stopPropagation()">
+              <div class="modal-header">
+                <div>
+                  <h3 style="font-size: 18px; font-weight: 700;">Confirm Registration & Payment</h3>
+                  <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">CREA(I) Simulated Direct Checkout</p>
+                </div>
+                <button class="modal-close" onclick="app.closeModal()">&times;</button>
+              </div>
+
+              <!-- Payer info -->
+              <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 13px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                  <span style="color: var(--text-muted);">Payer:</span>
+                  <strong>${payerName} (${payerCategory.replace('_', ' ').toUpperCase()})</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                  <span style="color: var(--text-muted);">Contact:</span>
+                  <span>+91 ${payerMobile} • ${payerEmail}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: var(--text-muted);">Program:</span>
+                  <span style="color: #38bdf8; font-weight: 600;">${head.title} (${head.code})</span>
+                </div>
+              </div>
+
+              <!-- GST Calculation Table -->
+              <div style="background: #0d1527; border: 1px solid #1f2d47; border-radius: 10px; padding: 16px; margin-bottom: 20px;">
+                <div style="font-size: 12px; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 10px;">
+                  Taxable Value & GST Breakdown (SAC: 9983)
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;">
+                  <span>Base Fee (Taxable Value):</span>
+                  <span>₹${base.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px; color: var(--text-muted);">
+                  <span>Central GST (CGST @ 9%):</span>
+                  <span>₹${cgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 13px; color: var(--text-muted);">
+                  <span>State GST (SGST @ 9%):</span>
+                  <span>₹${sgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-top: 1px solid var(--card-border); padding-top: 10px; font-size: 16px; font-weight: 800; color: #34d399;">
+                  <span>Total Amount Payable:</span>
+                  <span>₹${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 10px;">
+                <button onclick="app.closeModal()" class="btn btn-secondary" style="flex: 1;">Cancel</button>
+                <button onclick="app.executePayment('${head.id}', '${payerType}', '${payerCategory}', '${payerId}', '${payerName}', '${payerMobile}', '${payerEmail}')" class="btn btn-success" style="flex: 2;">
+                  ✓ Confirm & Complete Payment (₹${totalAmount.toLocaleString('en-IN')})
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      },
+
+      async executePayment(headId, payerType, payerCategory, payerId, payerName, payerMobile, payerEmail) {
+        const head = this.data.heads.find(h => h.id === headId);
+        if (!head) return;
+
+        if (head.status === 'deactivated' || head.status === 'inactive') {
+          alert(`"${head.title}" has been deactivated by administration and cannot accept registrations.`);
+          return;
+        }
+
+        // Try calling server API
+        try {
+          const res = await fetch("/api/payment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ headId, payerType, payerCategory, payerId, payerName, payerMobile, payerEmail })
+          });
+          if (res.ok) {
+            const result = await res.json();
+            // Refresh data from server
+            const refreshed = await fetch("/api/data");
+            const j = await refreshed.json();
+            this.data = j.data;
+            this.showPaymentSuccess(result.payment);
+            return;
+          } else {
+            const errJson = await res.json().catch(() => ({}));
+            alert(errJson.error || "Payment failed");
+            return;
+          }
+        } catch(e) {}
+
+        // Fallback offline execution
+        const base = Number(head.prices[payerCategory]);
+        const cgst = Math.round(base * 0.09 * 100) / 100;
+        const sgst = Math.round(base * 0.09 * 100) / 100;
+        const totalGst = Math.round((cgst + sgst) * 100) / 100;
+        const totalAmount = Math.round((base + totalGst) * 100) / 100;
+
+        const nextSerial = (this.data.invoiceCounter || 0) + 1;
+        this.data.invoiceCounter = nextSerial;
+        const serialStr = String(nextSerial).padStart(4, "0");
+        const fy = "2627";
+        const invoiceNo = `CREA/${fy}/${head.code.toUpperCase()}/${serialStr}`;
+
+        const newPayment = {
+          id: `pay-${Date.now()}`,
+          invoiceNo,
+          serial: nextSerial,
+          date: new Date().toISOString(),
+          headId: head.id,
+          headCode: head.code,
+          headTitle: head.title,
+          payerType,
+          payerCategory,
+          payerId,
+          payerName,
+          payerMobile,
+          payerEmail,
+          baseAmount: base,
+          cgst,
+          sgst,
+          totalGst,
+          totalAmount,
+          status: "success",
+          method: "Simulated Gateway (Instant Checkout)"
+        };
+
+        this.data.payments.unshift(newPayment);
+        this.data.emailLogs.unshift({
+          id: `log-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          recipient: payerEmail,
+          recipientName: payerName,
+          subject: `CREA(I) Official Tax Invoice ${invoiceNo} - ${head.title}`,
+          invoiceNo,
+          amount: totalAmount,
+          status: "Dispatched (Simulated SMTP)"
+        });
+
+        this.saveToStorage();
+        this.showPaymentSuccess(newPayment);
+      },
+
+      showPaymentSuccess(payment) {
+        document.getElementById("modal-root").innerHTML = `
+          <div class="modal-overlay" onclick="app.closeModal(event)">
+            <div class="modal-box" onclick="event.stopPropagation()" style="text-align: center;">
+              <div style="width: 64px; height: 64px; border-radius: 50%; background: rgba(16, 185, 129, 0.2); border: 2px solid #10b981; display: inline-flex; align-items: center; justify-content: center; font-size: 32px; margin-bottom: 16px;">
+                ✓
+              </div>
+              <h3 style="font-size: 22px; font-weight: 800; color: #ffffff; margin-bottom: 4px;">Payment Successful!</h3>
+              <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">Your transaction has been confirmed and recorded on CREA(I) ledgers.</p>
+
+              <div style="background: #090f1e; border: 1px solid var(--card-border); border-radius: 12px; padding: 18px; margin-bottom: 20px; text-align: left; font-size: 13px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                  <span style="color: var(--text-muted);">Unique Invoice No:</span>
+                  <strong style="color: #38bdf8; font-size: 15px;">${payment.invoiceNo}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                  <span style="color: var(--text-muted);">Total Amount (incl. 18% GST):</span>
+                  <strong style="color: #34d399; font-size: 15px;">₹${payment.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                  <span style="color: var(--text-muted);">Payer Name:</span>
+                  <span>${payment.payerName}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: var(--text-muted);">Invoice Dispatched To:</span>
+                  <span style="color: #f1f5f9;">${payment.payerEmail}</span>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 12px; justify-content: center;">
+                <button onclick="app.viewInvoice('${payment.invoiceNo}')" class="btn btn-primary">
+                  🖨️ Download & Print Tax Invoice
+                </button>
+                <button onclick="app.closeModal(); app.render();" class="btn btn-secondary">
+                  Back to Portal
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      },
+
+      // INVOICE VIEWER & PRINTABLE TAX INVOICE
+      viewInvoice(invoiceNo) {
+        const payment = this.data.payments.find(p => p.invoiceNo === invoiceNo);
+        if (!payment) return;
+        const head = this.data.heads.find(h => h.id === payment.headId || h.code === payment.headCode);
+
+        document.getElementById("modal-root").innerHTML = `
+          <div class="modal-overlay" onclick="app.closeModal(event)">
+            <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 800px;">
+              <div class="modal-header no-print">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span class="badge badge-paid">Official Tax Invoice</span>
+                  <span style="color: #38bdf8; font-weight: 700;">${payment.invoiceNo}</span>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <button onclick="window.print()" class="btn btn-primary btn-sm">🖨️ Print / Save PDF</button>
+                  <button class="modal-close" onclick="app.closeModal()">&times;</button>
+                </div>
+              </div>
+
+              <!-- Printable Tax Invoice Canvas -->
+              <div id="printable-invoice-container" style="background: #ffffff; color: #0f172a; padding: 32px; border-radius: 12px; font-family: Arial, sans-serif;">
+                <!-- Header -->
+                <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 20px;">
+                  <div>
+                    <h2 style="font-size: 20px; font-weight: 900; color: #1e3a8a; margin-bottom: 4px;">CREA(I)</h2>
+                    <div style="font-size: 11px; font-weight: 700; color: #334155; text-transform: uppercase;">Confederation of Real Estate Associates (India)</div>
+                    <div style="font-size: 11px; color: #475569; margin-top: 4px;">
+                      Registered Office: F1107, Ardente Office One, Hoodi Circle, Bangalore 560048<br>
+                      <strong>GSTIN: 29AAAAA0000A1Z5</strong> | PAN: AAATC1234D | State Code: 29
+                    </div>
+                  </div>
+
+                  <div style="text-align: right;">
+                    <div style="font-size: 18px; font-weight: 800; color: #1e3a8a;">TAX INVOICE</div>
+                    <div style="font-size: 11px; color: #64748b;">(Rule 46 of CGST Rules, 2017)</div>
+                    <div style="margin-top: 6px; font-size: 13px;">
+                      Invoice No: <strong style="color: #0f172a;">${payment.invoiceNo}</strong><br>
+                      Date: <strong>${new Date(payment.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Bill To -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; background: #f8fafc; padding: 14px; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 20px; font-size: 12px;">
+                  <div>
+                    <div style="font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 4px;">Billed To / Participant:</div>
+                    <div style="font-size: 14px; font-weight: 800; color: #0f172a;">${payment.payerName}</div>
+                    <div>Phone: +91 ${payment.payerMobile}</div>
+                    <div>Email: ${payment.payerEmail}</div>
+                    <div>Category: <strong>${payment.payerCategory.replace('_', ' ').toUpperCase()}</strong></div>
+                  </div>
+                  <div>
+                    <div style="font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 4px;">Program Details:</div>
+                    <div style="font-size: 13px; font-weight: 700; color: #0f172a;">${payment.headTitle}</div>
+                    <div>Schedule: ${head ? head.eventDate : '2026-2027'} (${head ? head.eventTime : 'Full Year'})</div>
+                    <div>Venue: ${head ? head.venue : 'CREA(I) Bangalore'}</div>
+                  </div>
+                </div>
+
+                <!-- Event Writeup Excerpt on Invoice -->
+                ${head && head.writeup ? `
+                  <div style="background: #f1f5f9; border-left: 3px solid #2563eb; padding: 10px 14px; margin-bottom: 20px; font-size: 11.5px; color: #334155; line-height: 1.5;">
+                    <strong style="color: #1e3a8a;">About this Event:</strong>
+                    ${head.writeup.slice(0, 320)}...
+                  </div>
+                ` : ''}
+
+                <!-- Itemized GST Table -->
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 24px;">
+                  <thead>
+                    <tr style="background: #0f172a; color: #ffffff;">
+                      <th style="padding: 8px 10px; text-align: left;">S.No</th>
+                      <th style="padding: 8px 10px; text-align: left;">Description of Head / Service</th>
+                      <th style="padding: 8px 10px; text-align: center;">SAC</th>
+                      <th style="padding: 8px 10px; text-align: right;">Taxable (₹)</th>
+                      <th style="padding: 8px 10px; text-align: right;">CGST 9%</th>
+                      <th style="padding: 8px 10px; text-align: right;">SGST 9%</th>
+                      <th style="padding: 8px 10px; text-align: right;">Total Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr style="border-bottom: 1px solid #cbd5e1;">
+                      <td style="padding: 10px;">1</td>
+                      <td style="padding: 10px;">
+                        <strong>${payment.headTitle}</strong>
+                        <div style="font-size: 11px; color: #64748b;">Code: ${payment.headCode} • Category: ${payment.payerCategory.replace('_', ' ').toUpperCase()}</div>
+                      </td>
+                      <td style="padding: 10px; text-align: center;">9983</td>
+                      <td style="padding: 10px; text-align: right;">₹${payment.baseAmount.toFixed(2)}</td>
+                      <td style="padding: 10px; text-align: right;">₹${payment.cgst.toFixed(2)}</td>
+                      <td style="padding: 10px; text-align: right;">₹${payment.sgst.toFixed(2)}</td>
+                      <td style="padding: 10px; text-align: right; font-weight: 700;">₹${payment.totalAmount.toFixed(2)}</td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr style="background: #f8fafc; font-weight: 800; font-size: 13px; border-top: 2px solid #0f172a;">
+                      <td colspan="6" style="padding: 10px; text-align: right;">Total Invoice Amount (INR):</td>
+                      <td style="padding: 10px; text-align: right; color: #1e3a8a;">₹${payment.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+
+                <!-- Footer Signatures -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 40px; font-size: 11px; color: #64748b;">
+                  <div>
+                    <div>Payment Method: <strong>Online Verified Transaction</strong></div>
+                    <div>Status: <strong>PAID IN FULL</strong></div>
+                    <div style="margin-top: 4px;">* This is a computer generated digital tax invoice.</div>
+                  </div>
+                  <div style="text-align: center;">
+                    <div style="font-family: 'Courier New', monospace; font-weight: 700; color: #1e3a8a; border: 1px dashed #94a3b8; padding: 6px 14px; border-radius: 4px; margin-bottom: 4px;">
+                      ✓ DIGITALLY SIGNED & VERIFIED
+                    </div>
+                    <div>For Confederation of Real Estate Associates (India)</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="margin-top: 20px; text-align: right;" class="no-print">
+                <button onclick="app.closeModal()" class="btn btn-secondary btn-sm">Close Window</button>
+              </div>
+            </div>
+          </div>
+        `;
+      },
+
+      closeModal(e) {
+        if (!e || e.target.classList.contains("modal-overlay") || e.target.classList.contains("modal-close")) {
+          document.getElementById("modal-root").innerHTML = "";
+        }
+      },
+
+      // CREATE PAYMENT HEAD MODAL
+      openNewHeadModal() {
+        document.getElementById("modal-root").innerHTML = `
+          <div class="modal-overlay" onclick="app.closeModal(event)">
+            <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 650px;">
+              <div class="modal-header">
+                <h3 style="font-size: 18px; font-weight: 700;">Create New Discriminatory Payment Head</h3>
+                <button class="modal-close" onclick="app.closeModal()">&times;</button>
+              </div>
+
+              <form onsubmit="app.saveNewHead(event)">
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+                  <div class="form-group">
+                    <label class="form-label">Head Title *</label>
+                    <input type="text" id="new-head-title" required placeholder="e.g. Masterclass on Commercial Leasing" class="form-input">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Head Code (e.g. TRN3, EVT2) *</label>
+                    <input type="text" id="new-head-code" required placeholder="TRN3" class="form-input" style="text-transform: uppercase;">
+                  </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                  <div class="form-group">
+                    <label class="form-label">Type *</label>
+                    <select id="new-head-type" class="form-select">
+                      <option value="training">Training</option>
+                      <option value="event">Event / Conclave</option>
+                      <option value="membership">Membership</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Event Date *</label>
+                    <input type="date" id="new-head-date" required value="2026-11-20" class="form-input">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Active Until (Cutoff) *</label>
+                    <input type="datetime-local" id="new-head-active-until" required value="2026-11-20T10:00" class="form-input">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Event Venue *</label>
+                  <input type="text" id="new-head-venue" required placeholder="e.g. The Oberoi, MG Road, Bangalore" class="form-input">
+                </div>
+
+                <!-- Discriminatory Prices (Excl. 18% GST) -->
+                <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+                  <div style="font-size: 12px; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 10px;">
+                    Discriminatory Base Prices (excl. 18% GST)
+                  </div>
+                  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+                    <div>
+                      <label class="form-label" style="font-size: 11px;">New Member (₹)</label>
+                      <input type="number" id="price-new_member" placeholder="1500" class="form-input">
+                    </div>
+                    <div>
+                      <label class="form-label" style="font-size: 11px;">Member (₹)</label>
+                      <input type="number" id="price-member" placeholder="1200" class="form-input">
+                    </div>
+                    <div>
+                      <label class="form-label" style="font-size: 11px;">Board Member (₹)</label>
+                      <input type="number" id="price-board_member" placeholder="0" class="form-input">
+                    </div>
+                    <div>
+                      <label class="form-label" style="font-size: 11px;">Non-Member (₹)</label>
+                      <input type="number" id="price-non_member" placeholder="2500" class="form-input" title="Leave blank if not open to non-members">
+                    </div>
+                  </div>
+                  <div style="font-size: 11px; color: var(--text-dim); margin-top: 6px;">
+                    * Leave Non-Member blank if the program is exclusively restricted to verified CREA members.
+                  </div>
+                </div>
+
+                <!-- 500 Word Writeup with AI Draft Generator -->
+                <div class="form-group">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label class="form-label" style="margin-bottom: 0;">Event Description & Write-Up (~500 Words)</label>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                      <button type="button" onclick="app.generateAIDraft()" class="btn btn-outline btn-sm" style="padding: 2px 8px; font-size: 11px;">
+                        🪄 Draft with AI Assistant
+                      </button>
+                      <span id="writeup-word-count" style="font-size: 11px; color: var(--text-dim);">0 words</span>
+                    </div>
+                  </div>
+                  <textarea id="new-head-writeup" rows="6" oninput="app.updateWordCount(this.value)" placeholder="Enter syllabus, agenda, speaker details, and key learning outcomes..." class="form-textarea"></textarea>
+                </div>
+
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                  <button type="button" onclick="app.closeModal()" class="btn btn-secondary">Cancel</button>
+                  <button type="submit" class="btn btn-primary">+ Publish Payment Head</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        `;
+      },
+
+      updateWordCount(text) {
+        const words = text.trim().split(/\s+/).filter(Boolean).length;
+        const el = document.getElementById("writeup-word-count");
+        if (el) el.textContent = `${words} words`;
+      },
+
+      generateAIDraft() {
+        const title = document.getElementById("new-head-title").value || "Real Estate Broker Mastery Masterclass";
+        const venue = document.getElementById("new-head-venue").value || "Bangalore Business Centre";
+        const date = document.getElementById("new-head-date").value || "Upcoming Session";
+
+        const draft = `Confederation of Real Estate Associates (India) — CREA(I) is pleased to announce an executive professional development program: '${title}'.
+
+Event Details:
+- Date: ${date}
+- Venue: ${venue}
+- Target Audience: Licensed Realtors, Brokerage Principals, Leasing Directors, and Investment Consultants.
+
+Program Overview:
+The contemporary real estate landscape in South India demands rigorous market acumen, digital transaction agility, and watertight regulatory compliance. This comprehensive session has been structured to address practical operational hurdles encountered by frontline brokers, from early client qualification to high-stake commission covenants.
+
+Key Modules & Learning Outcomes:
+1. Legal Scrutiny & Mandate Protection: Formulating exclusive seller and tenant representation mandates that safeguard your brokerage rights under Indian Contract Act covenants.
+2. Market Valuation Benchmarks: In-depth analysis of capital appreciation trends, rental yields, and absorption velocity across Tier-1 micro-markets.
+3. Overcoming Objections & Deal Structuring: Advanced negotiation strategies for resolving landlord-tenant frictions, security deposit covenants, and maintenance allocations.
+4. Digital Collateral & High-Conversion Showings: Leveraging professional digital walkthroughs, 3D floor plans, and rapid response WhatsApp funnels to maximize conversion ratios.
+5. Code of Professional Conduct & Peer Arbitration: Navigating co-brokerage arrangements with integrity, avoiding client poaching disputes, and leveraging CREA MLS forums.
+
+Accreditation & Deliverables:
+All registered participants will receive an official CREA(I) Continuing Professional Education (CPE) Certificate, digital course modules, standardized legal draft templates, and access to the post-training networking luncheon.
+
+Registrations are strictly capped to ensure personalized interactive facilitation. Ensure timely registration to confirm your seat.`;
+
+        document.getElementById("new-head-writeup").value = draft;
+        this.updateWordCount(draft);
+      },
+
+      async saveNewHead(e) {
+        e.preventDefault();
+        const title = document.getElementById("new-head-title").value.trim();
+        const code = document.getElementById("new-head-code").value.trim().toUpperCase();
+        const type = document.getElementById("new-head-type").value;
+        const eventDate = document.getElementById("new-head-date").value;
+        const activeUntil = document.getElementById("new-head-active-until").value;
+        const venue = document.getElementById("new-head-venue").value.trim();
+        const writeup = document.getElementById("new-head-writeup").value.trim();
+
+        const prices = {
+          new_member: document.getElementById("price-new_member").value ? Number(document.getElementById("price-new_member").value) : null,
+          member: document.getElementById("price-member").value ? Number(document.getElementById("price-member").value) : null,
+          board_member: document.getElementById("price-board_member").value ? Number(document.getElementById("price-board_member").value) : null,
+          non_member: document.getElementById("price-non_member").value ? Number(document.getElementById("price-non_member").value) : null
+        };
+
+        const newHead = {
+          id: `head-${Date.now()}`,
+          code,
+          title,
+          type,
+          eventDate,
+          eventTime: "10:00 AM - 05:00 PM IST",
+          venue,
+          activeUntil,
+          status: "active",
+          prices,
+          writeup
+        };
+
+        this.data.heads.unshift(newHead);
+        this.saveToStorage();
+
+        // Also push to server if running
+        try {
+          await fetch("/api/head", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newHead)
+          });
+        } catch(err){}
+
+        this.closeModal();
+        this.render();
+      },
+
+      // MODIFY / EDIT PAYMENT HEAD MODAL
+      openEditHeadModal(headId) {
+        const head = this.data.heads.find(h => h.id === headId);
+        if (!head) {
+          alert("Program / payment head not found.");
+          return;
+        }
+
+        // Format activeUntil for datetime-local
+        let activeUntilFormatted = "";
+        if (head.activeUntil) {
+          try {
+            const d = new Date(head.activeUntil);
+            const pad = (n) => String(n).padStart(2, "0");
+            const y = d.getFullYear();
+            const m = pad(d.getMonth() + 1);
+            const dt = pad(d.getDate());
+            const hr = pad(d.getHours());
+            const min = pad(d.getMinutes());
+            activeUntilFormatted = `${y}-${m}-${dt}T${hr}:${min}`;
+          } catch(e) {
+            activeUntilFormatted = (head.activeUntil || "").slice(0, 16);
+          }
+        }
+
+        const isDeactivated = head.status === "deactivated" || head.status === "inactive";
+        const newMemPrice = head.prices?.new_member ?? "";
+        const memPrice = head.prices?.member ?? "";
+        const boardPrice = head.prices?.board_member ?? "";
+        const nonMemPrice = head.prices?.non_member ?? "";
+
+        document.getElementById("modal-root").innerHTML = `
+          <div class="modal-overlay" onclick="app.closeModal(event)">
+            <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 740px; max-height: 90vh; overflow-y: auto;">
+              <div class="modal-header" style="position: sticky; top: -24px; background: #0d1527; z-index: 20; padding: 14px 0; margin-bottom: 16px; border-bottom: 1px solid var(--card-border);">
+                <div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="badge ${isDeactivated ? 'badge-deactivated' : 'badge-active'}" id="edit-modal-status-badge">
+                      ${isDeactivated ? '⏸ DEACTIVATED' : '● ACTIVE'}
+                    </span>
+                    <span class="badge badge-open">${head.code}</span>
+                    <span class="badge" style="background: rgba(148, 163, 184, 0.15); color: #94a3b8;">${(head.type || 'PROGRAM').toUpperCase()}</span>
+                  </div>
+                  <h3 style="font-size: 19px; font-weight: 700; margin-top: 6px;">Modify Program / Training Details</h3>
+                  <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                    Edit the name, extend registration & event dates, adjust tiered pricing, or toggle active/deactivate status.
+                  </p>
+                </div>
+                <button class="modal-close" onclick="app.closeModal()">&times;</button>
+              </div>
+
+              <form onsubmit="app.saveModifiedHead(event, '${head.id}')">
+                <!-- Section 1: Title & Classification -->
+                <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 10px; padding: 14px; margin-bottom: 16px;">
+                  <div style="font-size: 12px; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                    <span>🏷️</span> <span>Training / Program Name & Classification</span>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Training / Membership Name *</label>
+                    <input type="text" id="edit-head-title" required value="${app.escapeHtml(head.title)}" class="form-input" style="font-weight: 600; font-size: 14px;">
+                    <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">Modifying this updates the display title across all member portals, invoices, and payment receipts.</div>
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 12px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                      <label class="form-label">Head Code *</label>
+                      <input type="text" id="edit-head-code" required value="${app.escapeHtml(head.code)}" class="form-input" style="text-transform: uppercase;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                      <label class="form-label">Head Type *</label>
+                      <select id="edit-head-type" class="form-select">
+                        <option value="training" ${head.type === 'training' ? 'selected' : ''}>Training</option>
+                        <option value="membership" ${head.type === 'membership' ? 'selected' : ''}>Membership</option>
+                        <option value="event" ${head.type === 'event' ? 'selected' : ''}>Event / Conclave</option>
+                      </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                      <label class="form-label">Status (Active / Deactivated) *</label>
+                      <select id="edit-head-status" class="form-select" onchange="app.updateEditModalStatusBadge(this.value)">
+                        <option value="active" ${!isDeactivated ? 'selected' : ''}>● Active (Accepting Registrations)</option>
+                        <option value="deactivated" ${isDeactivated ? 'selected' : ''}>⏸ Deactivated (Registrations Paused)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Section 2: Dates & Extension Toolbar -->
+                <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 10px; padding: 14px; margin-bottom: 16px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                    <div>
+                      <div style="font-size: 12px; font-weight: 700; color: #38bdf8; text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
+                        <span>📅</span> <span>Program Dates & Registration Cutoff (Extend Dates)</span>
+                      </div>
+                      <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">
+                        Extend or edit cutoff to allow late registrations and update the event day.
+                      </div>
+                    </div>
+                    <!-- Quick Date Extension Buttons -->
+                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                      <span style="font-size: 11px; color: var(--text-dim); font-weight: 600;">⚡ Quick Extend:</span>
+                      <button type="button" onclick="app.extendEditDates(7)" class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;" title="Extend cutoff and event date by 7 days">+7 Days</button>
+                      <button type="button" onclick="app.extendEditDates(14)" class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;" title="Extend cutoff and event date by 14 days">+14 Days</button>
+                      <button type="button" onclick="app.extendEditDates(30)" class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;" title="Extend cutoff and event date by 30 days">+30 Days</button>
+                      <button type="button" onclick="app.extendEditDates(90)" class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px;" title="Extend cutoff and event date by 90 days">+90 Days</button>
+                    </div>
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                      <label class="form-label">Event / Program Date *</label>
+                      <input type="date" id="edit-head-date" required value="${head.eventDate || ''}" class="form-input">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                      <label class="form-label">Registration Cutoff (Active Until) *</label>
+                      <input type="datetime-local" id="edit-head-active-until" required value="${activeUntilFormatted}" class="form-input">
+                    </div>
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                      <label class="form-label">Event Time / Timings</label>
+                      <input type="text" id="edit-head-time" value="${app.escapeHtml(head.eventTime || '')}" placeholder="e.g. 10:00 AM - 04:00 PM IST" class="form-input">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                      <label class="form-label">Venue / Location</label>
+                      <input type="text" id="edit-head-venue" value="${app.escapeHtml(head.venue || '')}" placeholder="e.g. The Lalit Hotel, Bangalore" class="form-input">
+                    </div>
+                  </div>
+                  <div id="date-extension-feedback" style="font-size: 11.5px; color: #34d399; margin-top: 8px; display: none;"></div>
+                </div>
+
+                <!-- Section 3: Discriminatory Pricing (Increase / Decrease Prices) -->
+                <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 10px; padding: 14px; margin-bottom: 16px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                    <div>
+                      <div style="font-size: 12px; font-weight: 700; color: #38bdf8; text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
+                        <span>💰</span> <span>Discriminatory Pricing (Excl. 18% GST)</span>
+                      </div>
+                      <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">
+                        Adjust prices individually or use steppers to increase/decrease. 18% GST auto-calculates live.
+                      </div>
+                    </div>
+                    <!-- Bulk Price Steppers -->
+                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                      <span style="font-size: 11px; color: var(--text-dim); font-weight: 600;">⚡ Adjust All:</span>
+                      <button type="button" onclick="app.adjustAllEditPrices(500)" class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px; color: #34d399;">+ ₹500</button>
+                      <button type="button" onclick="app.adjustAllEditPrices(-500)" class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px; color: #fbbf24;">- ₹500</button>
+                      <button type="button" onclick="app.adjustAllEditPrices(100)" class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px; color: #34d399;">+ ₹100</button>
+                      <button type="button" onclick="app.adjustAllEditPrices(-100)" class="btn btn-secondary btn-sm" style="padding: 3px 8px; font-size: 11px; color: #fbbf24;">- ₹100</button>
+                    </div>
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+                    <!-- New Member -->
+                    <div style="background: #0f172a; border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 10px;">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label class="form-label" style="font-size: 11px; margin-bottom: 0; color: #fbbf24;">New Member</label>
+                        <div style="display: flex; gap: 2px;">
+                          <button type="button" onclick="app.adjustEditPrice('new_member', -100)" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" title="Decrease ₹100">-</button>
+                          <button type="button" onclick="app.adjustEditPrice('new_member', 100)" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" title="Increase ₹100">+</button>
+                        </div>
+                      </div>
+                      <input type="number" id="edit-price-new_member" value="${newMemPrice}" placeholder="1500" oninput="app.updateEditPriceGST('new_member')" class="form-input" style="padding: 6px 8px; font-size: 13px; font-weight: 700;">
+                      <div id="preview-new_member" style="font-size: 10.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.4;"></div>
+                    </div>
+
+                    <!-- Regular Member -->
+                    <div style="background: #0f172a; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 10px;">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label class="form-label" style="font-size: 11px; margin-bottom: 0; color: #38bdf8;">Regular Member</label>
+                        <div style="display: flex; gap: 2px;">
+                          <button type="button" onclick="app.adjustEditPrice('member', -100)" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" title="Decrease ₹100">-</button>
+                          <button type="button" onclick="app.adjustEditPrice('member', 100)" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" title="Increase ₹100">+</button>
+                        </div>
+                      </div>
+                      <input type="number" id="edit-price-member" value="${memPrice}" placeholder="1200" oninput="app.updateEditPriceGST('member')" class="form-input" style="padding: 6px 8px; font-size: 13px; font-weight: 700;">
+                      <div id="preview-member" style="font-size: 10.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.4;"></div>
+                    </div>
+
+                    <!-- Board Member -->
+                    <div style="background: #0f172a; border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 8px; padding: 10px;">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label class="form-label" style="font-size: 11px; margin-bottom: 0; color: #c084fc;">Board Member</label>
+                        <div style="display: flex; gap: 2px;">
+                          <button type="button" onclick="app.adjustEditPrice('board_member', -100)" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" title="Decrease ₹100">-</button>
+                          <button type="button" onclick="app.adjustEditPrice('board_member', 100)" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" title="Increase ₹100">+</button>
+                        </div>
+                      </div>
+                      <input type="number" id="edit-price-board_member" value="${boardPrice}" placeholder="0" oninput="app.updateEditPriceGST('board_member')" class="form-input" style="padding: 6px 8px; font-size: 13px; font-weight: 700;">
+                      <div id="preview-board_member" style="font-size: 10.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.4;"></div>
+                    </div>
+
+                    <!-- Non-Member (Guest) -->
+                    <div style="background: #0f172a; border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 8px; padding: 10px;">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <label class="form-label" style="font-size: 11px; margin-bottom: 0; color: #cbd5e1;">Non-Member (Guest)</label>
+                        <div style="display: flex; gap: 2px;">
+                          <button type="button" onclick="app.adjustEditPrice('non_member', -100)" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" title="Decrease ₹100">-</button>
+                          <button type="button" onclick="app.adjustEditPrice('non_member', 100)" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" title="Increase ₹100">+</button>
+                        </div>
+                      </div>
+                      <input type="number" id="edit-price-non_member" value="${nonMemPrice}" placeholder="2500" oninput="app.updateEditPriceGST('non_member')" class="form-input" style="padding: 6px 8px; font-size: 13px; font-weight: 700;" title="Leave blank if not open to non-members">
+                      <div id="preview-non_member" style="font-size: 10.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.4;"></div>
+                    </div>
+                  </div>
+                  <div style="font-size: 11px; color: var(--text-dim); margin-top: 8px;">
+                    * All prices exclude 18% GST (9% CGST + 9% SGST). Leave Non-Member blank if restricted to CREA members.
+                  </div>
+                </div>
+
+                <!-- Section 4: Event Write-Up (~500 Words) -->
+                <div class="form-group">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label class="form-label" style="margin-bottom: 0;">Description & Syllabus Write-Up (~500 Words)</label>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                      <button type="button" onclick="app.generateEditAIDraft()" class="btn btn-outline btn-sm" style="padding: 2px 8px; font-size: 11px;">
+                        🪄 Re-Draft with AI
+                      </button>
+                      <span id="edit-writeup-word-count" style="font-size: 11px; color: var(--text-dim);">
+                        ${(head.writeup || '').trim().split(/\s+/).filter(Boolean).length} words
+                      </span>
+                    </div>
+                  </div>
+                  <textarea id="edit-head-writeup" rows="5" oninput="app.updateEditWordCount(this.value)" placeholder="Enter syllabus, agenda, speaker details, and key learning outcomes..." class="form-textarea">${app.escapeHtml(head.writeup || '')}</textarea>
+                </div>
+
+                <!-- Modal Actions -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; flex-wrap: wrap; gap: 10px; border-top: 1px solid var(--card-border); padding-top: 16px;">
+                  <div>
+                    <button type="button" onclick="app.toggleHeadStatusFromModal('${head.id}')" class="btn btn-secondary btn-sm" style="${isDeactivated ? 'color: #34d399; border-color: rgba(16, 185, 129, 0.4);' : 'color: #f87171; border-color: rgba(239, 68, 68, 0.4);'}">
+                      ${isDeactivated ? '▶ Toggle to Active' : '⏸ Toggle to Deactivated'}
+                    </button>
+                  </div>
+                  <div style="display: flex; gap: 10px;">
+                    <button type="button" onclick="app.closeModal()" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary">💾 Save & Apply Changes</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        `;
+
+        // Run live GST previews for all initial tier values
+        ['new_member', 'member', 'board_member', 'non_member'].forEach(tier => {
+          app.updateEditPriceGST(tier);
+        });
+      },
+
+      updateEditModalStatusBadge(val) {
+        const badge = document.getElementById("edit-modal-status-badge");
+        if (!badge) return;
+        if (val === "deactivated") {
+          badge.className = "badge badge-deactivated";
+          badge.textContent = "⏸ DEACTIVATED";
+        } else {
+          badge.className = "badge badge-active";
+          badge.textContent = "● ACTIVE";
+        }
+      },
+
+      extendEditDates(days) {
+        const dateInput = document.getElementById("edit-head-date");
+        const cutoffInput = document.getElementById("edit-head-active-until");
+        const feedback = document.getElementById("date-extension-feedback");
+
+        if (dateInput && dateInput.value) {
+          const d = new Date(dateInput.value);
+          d.setDate(d.getDate() + days);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, "0");
+          const dt = String(d.getDate()).padStart(2, "0");
+          dateInput.value = `${y}-${m}-${dt}`;
+        }
+
+        if (cutoffInput && cutoffInput.value) {
+          const d = new Date(cutoffInput.value);
+          d.setDate(d.getDate() + days);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, "0");
+          const dt = String(d.getDate()).padStart(2, "0");
+          const hr = String(d.getHours()).padStart(2, "0");
+          const min = String(d.getMinutes()).padStart(2, "0");
+          cutoffInput.value = `${y}-${m}-${dt}T${hr}:${min}`;
+        }
+
+        if (feedback) {
+          feedback.style.display = "block";
+          feedback.innerHTML = `✓ Schedule & cutoff extended by <strong>+${days} days</strong>. Click 'Save & Apply Changes' to finalize.`;
+          setTimeout(() => { feedback.style.display = "none"; }, 4000);
+        }
+      },
+
+      adjustEditPrice(tier, delta) {
+        const input = document.getElementById(`edit-price-${tier}`);
+        if (!input) return;
+        let current = Number(input.value || 0);
+        current = Math.max(0, current + delta);
+        input.value = current;
+        this.updateEditPriceGST(tier);
+      },
+
+      adjustAllEditPrices(delta) {
+        ['new_member', 'member', 'board_member', 'non_member'].forEach(tier => {
+          const input = document.getElementById(`edit-price-${tier}`);
+          if (input && input.value !== "") {
+            let current = Number(input.value || 0);
+            current = Math.max(0, current + delta);
+            input.value = current;
+            this.updateEditPriceGST(tier);
+          }
+        });
+      },
+
+      updateEditPriceGST(tier) {
+        const input = document.getElementById(`edit-price-${tier}`);
+        const preview = document.getElementById(`preview-${tier}`);
+        if (!input || !preview) return;
+
+        const val = String(input.value || "").trim();
+        if (val === "" || isNaN(val)) {
+          preview.innerHTML = `<span style="color: var(--text-dim);">Restricted (N/A)</span>`;
+          return;
+        }
+
+        const base = Math.max(0, Number(val));
+        const cgst = Math.round(base * 0.09 * 100) / 100;
+        const sgst = Math.round(base * 0.09 * 100) / 100;
+        const total = Math.round((base + cgst + sgst) * 100) / 100;
+
+        preview.innerHTML = `Base: ₹${base.toLocaleString('en-IN')} + 18% GST: ₹${(cgst + sgst).toLocaleString('en-IN')}<br><strong style="color: #34d399;">Total: ₹${total.toLocaleString('en-IN')}</strong>`;
+      },
+
+      updateEditWordCount(text) {
+        const words = text.trim().split(/\s+/).filter(Boolean).length;
+        const el = document.getElementById("edit-writeup-word-count");
+        if (el) el.textContent = `${words} words`;
+      },
+
+      generateEditAIDraft() {
+        const title = document.getElementById("edit-head-title").value || "Professional Masterclass";
+        const venue = document.getElementById("edit-head-venue").value || "Bangalore Centre";
+        const date = document.getElementById("edit-head-date").value || "Upcoming Session";
+
+        const draft = `Confederation of Real Estate Associates (India) — CREA(I) is pleased to announce an updated executive professional development program: '${title}'.
+
+Program Overview:
+- Schedule: ${date}
+- Venue: ${venue}
+- Target Participants: Certified Realtors, Commercial Brokers, Advisory Consultants, and Agency Principals.
+
+Key Syllabus & Learning Objectives:
+1. Regulatory & Title Due Diligence: Navigating land records, RTC checks, Form 15 & 16 Encumbrance Certificates, and RERA Section 9/10 compliances.
+2. Watertight Brokerage Contracts: Formulating non-circumvention mandates, escrow management protocols, and fee protection covenants.
+3. High-Ticket Advisory & Digital Acquisition: Lead generation strategies for NRI investors, HNIs, and institutional leasing tenants.
+4. Professional Arbitration & Dispute Mediation: Resolving joint-brokerage commission conflicts under CREA self-regulatory guidelines.
+
+Participants receive official CREA(I) accreditation credits, certified study materials, and access to the post-training networking luncheon.`;
+
+        document.getElementById("edit-head-writeup").value = draft;
+        this.updateEditWordCount(draft);
+      },
+
+      toggleHeadStatusFromModal(headId) {
+        const select = document.getElementById("edit-head-status");
+        if (select) {
+          const newVal = select.value === "active" ? "deactivated" : "active";
+          select.value = newVal;
+          this.updateEditModalStatusBadge(newVal);
+        }
+      },
+
+      async saveModifiedHead(e, headId) {
+        e.preventDefault();
+        const head = this.data.heads.find(h => h.id === headId);
+        if (!head) {
+          alert("Program / payment head not found.");
+          return;
+        }
+
+        const title = document.getElementById("edit-head-title").value.trim();
+        const code = document.getElementById("edit-head-code").value.trim().toUpperCase();
+        const type = document.getElementById("edit-head-type").value;
+        const status = document.getElementById("edit-head-status").value;
+        const eventDate = document.getElementById("edit-head-date").value;
+        const activeUntil = document.getElementById("edit-head-active-until").value;
+        const eventTime = document.getElementById("edit-head-time").value.trim();
+        const venue = document.getElementById("edit-head-venue").value.trim();
+        const writeup = document.getElementById("edit-head-writeup").value.trim();
+
+        const parsePrice = (id) => {
+          const el = document.getElementById(id);
+          const val = el ? String(el.value || "").trim() : "";
+          if (val === "" || isNaN(val)) return null;
+          return Number(val);
+        };
+
+        const prices = {
+          new_member: parsePrice("edit-price-new_member"),
+          member: parsePrice("edit-price-member"),
+          board_member: parsePrice("edit-price-board_member"),
+          non_member: parsePrice("edit-price-non_member")
+        };
+
+        // Update properties
+        head.title = title;
+        head.code = code;
+        head.type = type;
+        head.status = status;
+        head.eventDate = eventDate;
+        head.eventTime = eventTime || head.eventTime || "Full Day";
+        head.activeUntil = activeUntil;
+        head.venue = venue;
+        head.prices = prices;
+        head.writeup = writeup;
+
+        this.saveToStorage();
+
+        // Also push to server if running
+        try {
+          await fetch("/api/head/update", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: head.id,
+              title,
+              code,
+              type,
+              status,
+              eventDate,
+              eventTime: head.eventTime,
+              activeUntil,
+              venue,
+              prices,
+              writeup
+            })
+          });
+        } catch(err){}
+
+        this.closeModal();
+        this.render();
+        alert(`✓ Program '${title}' modified and saved successfully!`);
+      },
+
+      async toggleHeadStatus(headId) {
+        const head = this.data.heads.find(h => h.id === headId);
+        if (!head) return;
+
+        const currentStatus = head.status || 'active';
+        const newStatus = (currentStatus === 'active') ? 'deactivated' : 'active';
+        head.status = newStatus;
+
+        this.saveToStorage();
+
+        try {
+          await fetch("/api/head/status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: head.id, status: newStatus })
+          });
+        } catch(err){}
+
+        this.render();
+        if (newStatus === 'deactivated') {
+          alert(`⏸ '${head.title}' has been DEACTIVATED. Registrations for this entry are paused.`);
+        } else {
+          alert(`▶ '${head.title}' is now ACTIVE. Registrations are open.`);
+        }
+      },
+
+      // MEMBERS MANAGEMENT MODAL
+      openMembersModal() {
+        document.getElementById("modal-root").innerHTML = `
+          <div class="modal-overlay" onclick="app.closeModal(event)">
+            <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 800px;">
+              <div class="modal-header">
+                <div>
+                  <h3 style="font-size: 18px; font-weight: 700;">CREA Member Directory & Management</h3>
+                  <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Add single members or bulk-import via CSV paste</p>
+                </div>
+                <button class="modal-close" onclick="app.closeModal()">&times;</button>
+              </div>
+
+              <!-- Add Member / Bulk Form -->
+              <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 10px; padding: 14px; margin-bottom: 20px;">
+                <div style="font-size: 12.5px; font-weight: 700; color: #38bdf8; margin-bottom: 8px;">+ Quick Add Individual Member:</div>
+                <div style="display: grid; grid-template-columns: 2fr 1.5fr 2fr 1.5fr auto; gap: 8px; align-items: flex-end;">
+                  <div>
+                    <label class="form-label" style="font-size: 11px;">Name</label>
+                    <input type="text" id="add-mem-name" placeholder="Vikram" class="form-input" style="padding: 7px 10px; font-size: 12px;">
+                  </div>
+                  <div>
+                    <label class="form-label" style="font-size: 11px;">Mobile</label>
+                    <input type="text" id="add-mem-mobile" placeholder="9845012345" class="form-input" style="padding: 7px 10px; font-size: 12px;">
+                  </div>
+                  <div>
+                    <label class="form-label" style="font-size: 11px;">Email</label>
+                    <input type="email" id="add-mem-email" placeholder="vikram@realty.in" class="form-input" style="padding: 7px 10px; font-size: 12px;">
+                  </div>
+                  <div>
+                    <label class="form-label" style="font-size: 11px;">Category</label>
+                    <select id="add-mem-cat" class="form-select" style="padding: 7px 10px; font-size: 12px;">
+                      <option value="member">Member</option>
+                      <option value="new_member">New Member</option>
+                      <option value="board_member">Board Member</option>
+                    </select>
+                  </div>
+                  <button onclick="app.addSingleMember()" class="btn btn-primary btn-sm" style="height: 34px;">+ Add</button>
+                </div>
+              </div>
+
+              <!-- Members Table -->
+              <div style="max-height: 340px; overflow-y: auto;">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Name & Firm</th>
+                      <th>Mobile</th>
+                      <th>Email</th>
+                      <th>Category</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${this.data.members.map(m => `
+                      <tr>
+                        <td>
+                          <strong>${m.name}</strong>
+                          <div style="font-size: 11px; color: var(--text-dim);">${m.company || 'Broker'}</div>
+                        </td>
+                        <td>${m.mobile}</td>
+                        <td style="font-size: 12px; color: #38bdf8;">${m.email}</td>
+                        <td><span class="badge badge-${m.category}">${m.category.replace('_', ' ')}</span></td>
+                        <td>
+                          <button onclick="app.deleteMember('${m.id}')" class="btn btn-secondary btn-sm" style="color: #f87171; padding: 2px 6px;">Delete</button>
+                        </td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style="margin-top: 18px; text-align: right;">
+                <button onclick="app.closeModal()" class="btn btn-secondary btn-sm">Done</button>
+              </div>
+            </div>
+          </div>
+        `;
+      },
+
+      addSingleMember() {
+        const name = document.getElementById("add-mem-name").value.trim();
+        const mobile = document.getElementById("add-mem-mobile").value.trim();
+        const email = document.getElementById("add-mem-email").value.trim();
+        const category = document.getElementById("add-mem-cat").value;
+
+        if (!name || !mobile) {
+          alert("Name and mobile are mandatory.");
+          return;
+        }
+
+        const newMem = {
+          id: `mem-${Date.now()}`,
+          name,
+          mobile,
+          email,
+          category,
+          company: "Independent Realtor",
+          city: "Bangalore"
+        };
+
+        this.data.members.unshift(newMem);
+        this.saveToStorage();
+        this.openMembersModal(); // Refresh modal
+      },
+
+      deleteMember(id) {
+        if (!confirm("Are you sure you want to remove this member?")) return;
+        this.data.members = this.data.members.filter(m => m.id !== id);
+        this.saveToStorage();
+        this.openMembersModal();
+      },
+
+      // 1-CLICK YEARLY MEMBERSHIP RENEWAL
+      triggerYearlyRenewal() {
+        if (!confirm("Activate 1-Click Yearly Membership Renewal? This will promote 'New Member' accounts to regular 'Member' and create a new Membership renewal payment head.")) return;
+
+        const nextYear = new Date().getFullYear() + 1;
+
+        // Promote new_member -> member
+        this.data.members.forEach(m => {
+          if (m.category === "new_member") m.category = "member";
+        });
+
+        // Add renewal head
+        const renewalHead = {
+          id: `head-mem-${Date.now()}`,
+          code: "MEM",
+          title: `Annual CREA(I) Membership Renewal ${nextYear}-${nextYear + 1}`,
+          type: "membership",
+          eventDate: `${nextYear}-04-01`,
+          eventTime: "Full Year Access",
+          venue: "All Regional Chapters",
+          activeUntil: `${nextYear + 1}-03-31T23:59:59`,
+          status: "active",
+          prices: { new_member: 12000, member: 10000, board_member: 8000, non_member: null },
+          writeup: `Annual membership renewal for accredited real estate brokerages for ${nextYear}-${nextYear + 1}. Unlocks full integration with CREA Multi-Listing Exchange, legal escrow protection, and certified broker masterclasses.`
+        };
+
+        this.data.heads.unshift(renewalHead);
+        this.saveToStorage();
+        alert(`Yearly Membership Renewal Activated! Head '${renewalHead.title}' published and all New Members upgraded to Regular Members.`);
+        this.render();
+      },
+
+      // EXPORT CSV
+      exportCSV() {
+        const rows = [
+          ["Invoice Number", "Date", "Payer Name", "Mobile", "Email", "Payer Type", "Category", "Program Head", "Head Code", "Base (INR)", "CGST 9% (INR)", "SGST 9% (INR)", "Total Paid (INR)", "Status"]
+        ];
+
+        this.data.payments.forEach(p => {
+          rows.push([
+            p.invoiceNo,
+            p.date,
+            `"${p.payerName}"`,
+            p.payerMobile,
+            p.payerEmail,
+            p.payerType,
+            p.payerCategory,
+            `"${p.headTitle}"`,
+            p.headCode,
+            p.baseAmount,
+            p.cgst,
+            p.sgst,
+            p.totalAmount,
+            p.status
+          ]);
+        });
+
+        const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `CREA_Payments_Ledger_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      },
+
+      // SIMULATE 10 PAYMENTS
+      simulatePayments() {
+        const sampleGuests = [
+          { name: "Vikram Singhania", mobile: "9811223344", email: "vikram@singhaniarealty.in" },
+          { name: "Neha Chhabra", mobile: "9822334455", email: "neha@chhabrahomes.com" },
+          { name: "Arun Alva", mobile: "9833445566", email: "arun@alvabrokerage.co" }
+        ];
+
+        const fy = "2627";
+
+        for (let i = 0; i < 10; i++) {
+          const isMember = Math.random() > 0.4;
+          let payer, cat, payerType, payerId;
+
+          if (isMember) {
+            payer = this.data.members[Math.floor(Math.random() * this.data.members.length)];
+            cat = payer.category;
+            payerType = "member";
+            payerId = payer.id;
+          } else {
+            payer = sampleGuests[Math.floor(Math.random() * sampleGuests.length)];
+            cat = "non_member";
+            payerType = "non_member";
+            payerId = null;
+          }
+
+          // Pick active head
+          const validHeads = this.data.heads.filter(h => (h.status !== 'deactivated' && h.status !== 'inactive') && h.prices[cat] !== null && h.prices[cat] !== undefined);
+          if (validHeads.length === 0) continue;
+          const head = validHeads[Math.floor(Math.random() * validHeads.length)];
+
+          const base = Number(head.prices[cat]);
+          const cgst = Math.round(base * 0.09 * 100) / 100;
+          const sgst = Math.round(base * 0.09 * 100) / 100;
+          const totalGst = Math.round((cgst + sgst) * 100) / 100;
+          const totalAmount = Math.round((base + totalGst) * 100) / 100;
+
+          const nextSerial = (this.data.invoiceCounter || 0) + 1;
+          this.data.invoiceCounter = nextSerial;
+          const serialStr = String(nextSerial).padStart(4, "0");
+          const invoiceNo = `CREA/${fy}/${head.code.toUpperCase()}/${serialStr}`;
+
+          this.data.payments.unshift({
+            id: `pay-${Date.now()}-${i}`,
+            invoiceNo,
+            serial: nextSerial,
+            date: new Date(Date.now() - Math.floor(Math.random() * 86400000 * 25)).toISOString(),
+            headId: head.id,
+            headCode: head.code,
+            headTitle: head.title,
+            payerType,
+            payerCategory: cat,
+            payerId,
+            payerName: payer.name,
+            payerMobile: payer.mobile,
+            payerEmail: payer.email,
+            baseAmount: base,
+            cgst,
+            sgst,
+            totalGst,
+            totalAmount,
+            status: "success",
+            method: "Simulated Direct"
+          });
+        }
+
+        this.saveToStorage();
+        alert("Simulated 10 additional transactions successfully!");
+        this.render();
+      },
+
+      // RESET ALL PAYMENTS
+      resetAllPayments() {
+        if (!confirm("Are you sure you want to clear all payments and reset invoice numbering back to 0001?")) return;
+        this.data.payments = [];
+        this.data.emailLogs = [];
+        this.data.invoiceCounter = 0;
+        this.saveToStorage();
+        alert("All payments cleared. Invoice numbering reset to 0001.");
+        this.render();
+      }
+    };
+
+    // Initialize application on page load
+    window.addEventListener("DOMContentLoaded", () => {
+      app.init();
+    });
+  </script>
+</body>
+</html>
