@@ -86,10 +86,10 @@ export default async function handler(req, res) {
         address: member.address ? member.address.trim() : null,
         company: (member.company || "").trim() || "CREA Member Brokerage",
         city: member.city || "Bangalore",
-        status: member.status || "active",
-        lastPaidFY: member.lastPaidFY || "2627",
+        status: member.status || "deactivated",
+        lastPaidFY: member.lastPaidFY !== undefined ? member.lastPaidFY : null,
         paymentMeans: member.paymentMeans || null,
-        activationNote: member.activationNote || null,
+        activationNote: member.activationNote || "Pending Annual Membership Payment",
         joinedDate: new Date().toISOString().split("T")[0]
       });
     } else if (bulkText) {
@@ -105,10 +105,10 @@ export default async function handler(req, res) {
             category: parts[3] ? parts[3].toLowerCase().replace(/\s+/g, "_") : "member",
             company: parts[4] || "Real Estate Broker",
             city: "Bangalore",
-            status: "active",
-            lastPaidFY: "2627",
+            status: "deactivated",
+            lastPaidFY: null,
             paymentMeans: null,
-            activationNote: null,
+            activationNote: "Pending Annual Membership Payment",
             joinedDate: new Date().toISOString().split("T")[0]
           });
         }

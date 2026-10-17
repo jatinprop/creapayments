@@ -940,10 +940,10 @@ const server = http.createServer((req, res) => {
           address: member.address ? member.address.trim() : null,
           company: (member.company || "").trim() || "CREA Member Brokerage",
           city: member.city || "Bangalore",
-          status: member.status || "active",
-          lastPaidFY: member.lastPaidFY || "2627",
+          status: member.status || "deactivated",
+          lastPaidFY: member.lastPaidFY !== undefined ? member.lastPaidFY : null,
           paymentMeans: member.paymentMeans || null,
-          activationNote: member.activationNote || null,
+          activationNote: member.activationNote || "Pending Annual Membership Payment",
           joinedDate: new Date().toISOString().split("T")[0]
         };
         data.members.push(newMem);
@@ -961,6 +961,10 @@ const server = http.createServer((req, res) => {
               category: parts[3] ? parts[3].toLowerCase().replace(/\s+/g, "_") : "member",
               company: parts[4] || "Real Estate Broker",
               city: "Bangalore",
+              status: "deactivated",
+              lastPaidFY: null,
+              paymentMeans: null,
+              activationNote: "Pending Annual Membership Payment",
               joinedDate: new Date().toISOString().split("T")[0]
             });
           }
