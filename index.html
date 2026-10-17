@@ -615,6 +615,35 @@
         return null;
       },
 
+      hasPaidMembershipForFY(member, fyCode) {
+        if (!member) return false;
+        const fy = fyCode || this.getFinancialYear().code;
+
+        // 1. Check member.lastPaidFY
+        const val = member.lastPaidFY;
+        if (val) {
+          const s = String(typeof val === 'object' ? (val.code || val.label || '') : val);
+          if (s === fy || s.includes(fy) || s.includes('2627') || s.includes('2026')) {
+            return true;
+          }
+        }
+
+        // 2. Check successful membership payments in the current FY
+        const hasPayment = (this.data.payments || []).some(p => {
+          const isMemberMatch = p.payerId === member.id || p.payerMobile === member.mobile;
+          if (!isMemberMatch || p.status !== 'success') return false;
+          const isMemHead = p.headCode === 'MEM' || (p.headTitle && p.headTitle.toLowerCase().includes('membership'));
+          if (!isMemHead) return false;
+
+          if (p.invoiceNo && (p.invoiceNo.includes(`/${fy}/`) || p.invoiceNo.includes('/2627/'))) return true;
+          if (p.headTitle && (p.headTitle.includes('2026-2027') || p.headTitle.includes('2026-27'))) return true;
+          if (p.date && new Date(p.date) >= new Date('2026-04-01')) return true;
+          return false;
+        });
+
+        return Boolean(hasPayment);
+      },
+
       normalizeData() {
         if (!this.data) return;
         if (!this.data.heads) this.data.heads = [];
@@ -907,22 +936,30 @@
         // Member payments (all successful historical payments by this member)
         const memberPayments = (this.data.payments || []).filter(p => (p.payerId === member.id || p.payerMobile === member.mobile) && p.status === 'success');
 
+        // Check if member has already paid annual membership for this financial year
+        const isMemPaid = this.hasPaidMembershipForFY(member, fy.code);
+
         // Find current active membership head
         const memHead = (this.data.heads || []).find(h => (h.code === 'MEM' || h.type === 'membership') && h.status === 'active' && !h.isDeleted && h.status !== 'deleted');
-        const isMemPaid = memberPayments.some(p => p.headCode === 'MEM' || (p.headTitle && p.headTitle.toLowerCase().includes('membership')));
 
-        // Open Heads available for payment - STRICTLY ACTIVE ONLY
+        // Open Heads available for payment - STRICTLY ACTIVE TRAININGS & CONCLAVES ONLY
+        // Annual membership is NEVER duplicated in the generic event tiles grid (handled exclusively in the dedicated membership renewal flow above)
         // Deactivated, deleted, expired, or already-paid events are completely omitted
         const activeOpenHeads = (this.data.heads || []).filter(h => {
           const isDeactivated = h.status === 'deactivated' || h.status === 'inactive';
           const isDeleted = h.status === 'deleted' || h.isDeleted;
           const isExpired = h.activeUntil && new Date(h.activeUntil) < now;
+          const isMem = (h.code === 'MEM' || h.type === 'membership' || (h.title && h.title.toLowerCase().includes('membership')));
+
+          // Exclude Annual Membership from the generic events tile grid
+          if (isMem) return false;
+
           const price = this.getHeadPrice(h, member.category);
           const hasPrice = price !== null && price !== undefined && price !== "";
           const alreadyPaid = memberPayments.some(p => p.headId === h.id || p.headCode === h.code);
 
           return !isDeactivated && !isDeleted && !isExpired && hasPrice && !alreadyPaid;
-        }).sort((a, b) => (a.code === 'MEM' ? -1 : b.code === 'MEM' ? 1 : 0));
+        });
 
         return `
           <!-- Member Greeting Card -->
@@ -935,7 +972,7 @@
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                   <h2 style="font-size: 20px; font-weight: 700;">${member.name}</h2>
                   <span class="badge badge-${member.category}">${member.category.replace('_', ' ')}</span>
-                  ${member.status === 'active' ? `
+                  ${(isMemPaid || member.status === 'active') ? `
                     <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.5);">● ACTIVE (${fy.label})</span>
                   ` : `
                     <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.5);">○ DEACTIVATED (PENDING ${fy.label} RENEWAL)</span>
@@ -955,8 +992,8 @@
             </div>
           </div>
 
-          <!-- Official Accredited Membership Certificate Card -->
-          ${member.status === 'active' ? `
+          <!-- Official Accredited Membership Certificate Card (Active Standing) -->
+          ${(isMemPaid || member.status === 'active') ? `
             <div class="glass-card" style="margin-bottom: 24px; border: 1.5px solid rgba(245, 158, 11, 0.4); background: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(15, 23, 42, 0.9) 100%); padding: 18px 22px;">
               <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
                 <div style="display: flex; gap: 16px; align-items: center;">
@@ -966,7 +1003,7 @@
                   <div>
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                       <h4 style="font-size: 16px; font-weight: 800; color: #fde68a; margin: 0;">
-                        Official CREA(I) Membership Certificate (FY 2026-2027)
+                        Official CREA(I) Membership Certificate (${fy.label})
                       </h4>
                       <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #059669; font-size: 10.5px;">
                         ● ACCREDITED & ACTIVE
@@ -986,8 +1023,25 @@
             </div>
           ` : ''}
 
+          <!-- Associate Member: Fees Paid, Waiting on Main Member Annual Renewal -->
+          ${(isMemPaid && member.status === 'deactivated' && member.category === 'associate_member') ? `
+            <div class="glass-card" style="border: 1.5px solid #f59e0b; background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%); margin-bottom: 24px; padding: 18px 22px;">
+              <div style="display: flex; gap: 14px; align-items: center;">
+                <span style="font-size: 28px;">⏳</span>
+                <div>
+                  <h4 style="font-size: 15px; font-weight: 800; color: #fbbf24; margin: 0 0 4px 0;">
+                    Associate Dues Paid — Awaiting Main Member Annual Renewal
+                  </h4>
+                  <p style="font-size: 12.5px; color: #fde68a; margin: 0; line-height: 1.5;">
+                    Your Associate Membership fee for ${fy.label} has been received and confirmed. As per CREA(I) regulations, your associate standing will automatically become Active as soon as your linked main member (${member.parentMemberName || 'Primary Member'}) completes their annual membership payment. No further payment is required from you.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ` : ''}
+
           <!-- 1st April Auto-Deactivation Notice for Members Pending Renewal -->
-          ${member.status === 'deactivated' ? `
+          ${(!isMemPaid && member.status === 'deactivated') ? `
             <div class="glass-card" style="border: 2px solid #ef4444; background: linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(127, 29, 29, 0.08) 100%); margin-bottom: 24px; padding: 20px;">
               <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
                 <div style="display: flex; gap: 14px; align-items: flex-start;">
@@ -997,8 +1051,12 @@
                       Membership Deactivated — Renewal Required for ${fy.label}
                     </h3>
                     <p style="font-size: 13px; color: #fecaca; margin: 0; line-height: 1.5; max-width: 680px;">
-                      As on 1st April of every year, all CREA(I) memberships are automatically set to deactivated pending annual renewal.
-                      Please pay your <strong>${fy.label} Annual Membership</strong> below. Once payment is recorded, your verified standing and accredited rates will automatically be reactivated!
+                      ${member.category === 'associate_member' ? `
+                        ${member.deactivationReason || `Please pay your discounted Associate Member fee for ${fy.label}. Once paid and your linked main member is active, your standing is restored.`}
+                      ` : `
+                        As on 1st April of every year, all CREA(I) memberships are automatically set to deactivated pending annual renewal.
+                        Please pay your <strong>${fy.label} Annual Membership</strong> below. Once payment is recorded, your verified standing and accredited rates will automatically be reactivated!
+                      `}
                     </p>
                   </div>
                 </div>
@@ -1207,6 +1265,8 @@
           const isDeactivated = h.status === 'deactivated' || h.status === 'inactive';
           const isDeleted = h.status === 'deleted' || h.isDeleted;
           const isExpired = h.activeUntil && new Date(h.activeUntil) < now;
+          const isMem = (h.code === 'MEM' || h.type === 'membership' || (h.title && h.title.toLowerCase().includes('membership')));
+          if (isMem) return false;
           const price = h.prices ? h.prices.non_member : null;
           const hasPrice = price !== null && price !== undefined && price !== "";
 
@@ -2019,6 +2079,9 @@ ${head.writeup || 'No detailed write-up provided.'}
           return;
         }
 
+        const isMem = (head.code === 'MEM' || head.type === 'membership' || (head.title && head.title.toLowerCase().includes('membership')));
+        const fy = this.getFinancialYear();
+
         let payerName, payerMobile, payerEmail, payerCategory, payerType, payerId, payerGstin, payerAddress, payerCompany;
 
         const isMember = mode === "member" || (!mode && Boolean(this.loggedInMember));
@@ -2027,6 +2090,26 @@ ${head.writeup || 'No detailed write-up provided.'}
             alert("Please sign in as a member first.");
             return;
           }
+
+          // GUARD: Annual membership can only be taken/paid once per financial year
+          if (isMem && this.hasPaidMembershipForFY(this.loggedInMember, fy.code)) {
+            alert(`⚠️ CREA(I) Annual Membership for ${fy.label} has already been paid for ${this.loggedInMember.name}.\n\nA member can only pay annual membership once per financial year. Your official certificate is already available in your member portal.`);
+            return;
+          }
+
+          // GUARD: Check if already registered for an event
+          if (!isMem) {
+            const alreadyRegistered = (this.data.payments || []).some(p =>
+              (p.payerId === this.loggedInMember.id || p.payerMobile === this.loggedInMember.mobile) &&
+              (p.headId === head.id || p.headCode === head.code) &&
+              p.status === 'success'
+            );
+            if (alreadyRegistered) {
+              alert(`You are already registered for "${head.title}". You cannot register for the same program twice.`);
+              return;
+            }
+          }
+
           payerName = this.loggedInMember.name;
           payerMobile = this.loggedInMember.mobile;
           payerEmail = this.loggedInMember.email;
@@ -2038,6 +2121,11 @@ ${head.writeup || 'No detailed write-up provided.'}
           payerCompany = this.loggedInMember.company || "";
         } else {
           // Guest Mode
+          if (isMem) {
+            alert("Annual Membership is exclusively available for registered CREA(I) members. Please log in to your member account.");
+            return;
+          }
+
           payerName = this.guestInfo.name.trim();
           payerMobile = this.guestInfo.mobile.trim();
           payerEmail = this.guestInfo.email.trim();
@@ -2160,6 +2248,20 @@ ${head.writeup || 'No detailed write-up provided.'}
           return;
         }
 
+        const isMem = (head.code === "MEM" || head.type === "membership" || (head.title && head.title.toLowerCase().includes("membership")));
+        const fy = this.getFinancialYear();
+
+        // 1. Client-side guard against duplicate annual membership payment
+        if (isMem && (payerId || payerMobile)) {
+          const targetMem = this.data.members.find(m => m.id === payerId || m.mobile === payerMobile) || (this.loggedInMember && (this.loggedInMember.id === payerId || this.loggedInMember.mobile === payerMobile) ? this.loggedInMember : null);
+          if (targetMem && this.hasPaidMembershipForFY(targetMem, fy.code)) {
+            alert(`⚠️ CREA(I) Annual Membership for ${fy.label} has already been paid for ${targetMem.name}.\n\nA member can only pay annual membership once per financial year.`);
+            this.closeModal();
+            this.render();
+            return;
+          }
+        }
+
         const basePrice = this.getHeadPrice(head, payerCategory);
         if (basePrice === null || basePrice === undefined) {
           alert("No price configured for this category.");
@@ -2171,7 +2273,6 @@ ${head.writeup || 'No detailed write-up provided.'}
         const sgst = Math.round(base * 0.09 * 100) / 100;
         const totalGst = Math.round((cgst + sgst) * 100) / 100;
         const totalAmount = Math.round((base + totalGst) * 100) / 100;
-        const fy = this.getFinancialYear();
 
         // Try calling server API
         try {
@@ -2187,10 +2288,27 @@ ${head.writeup || 'No detailed write-up provided.'}
             const j = await refreshed.json();
             this.data = j.data;
             this.normalizeData();
+            // Sync loggedInMember with refreshed member data
+            if (this.loggedInMember) {
+              const fresh = this.data.members.find(m => m.id === this.loggedInMember.id || m.mobile === this.loggedInMember.mobile);
+              if (fresh) {
+                this.loggedInMember = { ...fresh };
+              }
+            }
+            this.saveToStorage();
+            this.render();
             this.showPaymentSuccess(result.payment);
             return;
+          } else {
+            const errJson = await res.json().catch(() => ({}));
+            alert(errJson.error || "Payment could not be processed.");
+            this.closeModal();
+            this.render();
+            return;
           }
-        } catch(e) {}
+        } catch(e) {
+          console.warn("Server API payment failed, falling back to local simulation:", e);
+        }
 
         // Fallback offline execution
         const nextSerial = (this.data.invoiceCounter || 0) + 1;
@@ -2241,7 +2359,6 @@ ${head.writeup || 'No detailed write-up provided.'}
         });
 
         // If membership payment, auto-activate the member offline
-        const isMem = head.code === "MEM" || head.type === "membership" || (head.title && head.title.toLowerCase().includes("membership"));
         if (isMem && (payerId || payerMobile)) {
           const mem = this.data.members.find(m => m.id === payerId || m.mobile === payerMobile);
           if (mem) {
@@ -2254,17 +2371,26 @@ ${head.writeup || 'No detailed write-up provided.'}
               mem.company = payerCompany;
             }
           }
+          if (this.loggedInMember && (this.loggedInMember.id === payerId || this.loggedInMember.mobile === payerMobile)) {
+            this.loggedInMember.status = "active";
+            this.loggedInMember.lastPaidFY = fy.code;
+            if (payerCompany && (!this.loggedInMember.company || this.loggedInMember.company === "Independent Realtor")) {
+              this.loggedInMember.company = payerCompany;
+            }
+          }
           this.normalizeData();
         }
 
         this.saveToStorage();
+        this.render();
         this.showPaymentSuccess(newPayment);
       },
 
       showPaymentSuccess(payment) {
         document.getElementById("modal-root").innerHTML = `
-          <div class="modal-overlay" onclick="app.closeModal(event)">
-            <div class="modal-box" onclick="event.stopPropagation()" style="text-align: center;">
+          <div class="modal-overlay" onclick="app.closeModal(event); app.render();">
+            <div class="modal-box" onclick="event.stopPropagation()" style="text-align: center; position: relative;">
+              <button class="modal-close" onclick="app.closeModal(); app.render();" style="position: absolute; right: 16px; top: 16px;">&times;</button>
               <div style="width: 64px; height: 64px; border-radius: 50%; background: rgba(16, 185, 129, 0.2); border: 2px solid #10b981; display: inline-flex; align-items: center; justify-content: center; font-size: 32px; margin-bottom: 16px;">
                 ✓
               </div>

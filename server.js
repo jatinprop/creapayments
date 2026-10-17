@@ -636,6 +636,26 @@ const server = http.createServer((req, res) => {
         return res.end(JSON.stringify({ success: false, error: "This payment head is deactivated or deleted and cannot accept registrations." }));
       }
 
+      const fy = getFinancialYearCode();
+
+      // RULE: Guard against duplicate Annual Membership payment for the same financial year
+      const isMembershipPayment = head.code === "MEM" || head.type === "membership" || (head.title && head.title.toLowerCase().includes("membership"));
+      if (isMembershipPayment && (body.payerId || body.payerMobile)) {
+        const existingMemPay = (data.payments || []).find((p) =>
+          (p.payerId === body.payerId || p.payerMobile === body.payerMobile) &&
+          (p.headCode === "MEM" || (p.headTitle && p.headTitle.toLowerCase().includes("membership"))) &&
+          p.status === "success" &&
+          (p.invoiceNo?.includes(`/${fy}/`) || (p.date && new Date(p.date) >= new Date('2026-04-01')))
+        );
+        if (existingMemPay) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({
+            success: false,
+            error: `Annual Membership for financial year ${fy} has already been paid (Tax Invoice: ${existingMemPay.invoiceNo}). Duplicate payment is not allowed.`
+          }));
+        }
+      }
+
       // 18% GST Calculations
       const base = Number(basePrice);
       const cgst = Math.round(base * 0.09 * 100) / 100;
@@ -647,7 +667,6 @@ const server = http.createServer((req, res) => {
       const nextSerial = (data.invoiceCounter || 0) + 1;
       data.invoiceCounter = nextSerial;
       const serialStr = String(nextSerial).padStart(4, "0");
-      const fy = getFinancialYearCode();
       const invoiceNo = `CREA/${fy}/${head.code.toUpperCase()}/${serialStr}`;
 
       const now = new Date().toISOString();
@@ -681,14 +700,14 @@ const server = http.createServer((req, res) => {
       data.payments.unshift(newPayment);
 
       // Auto-activate member if payment is for membership
-      const isMembershipPayment = head.code === "MEM" || head.type === "membership" || (head.title && head.title.toLowerCase().includes("membership"));
       if (isMembershipPayment && (payerId || payerMobile)) {
         const mem = data.members.find((m) => m.id === payerId || m.mobile === payerMobile);
         if (mem) {
           mem.status = "active";
           mem.lastPaidFY = fy;
           mem.paymentMeans = "Online Gateway";
-          mem.activationNote = `Online Payment (Invoice ${invoiceNo})`;
+          mem.activationNote = (mem.category === 'associate_member') ? `Associate Fee Paid (Invoice ${invoiceNo})` : `Online Payment (Invoice ${invoiceNo})`;
+          mem.deactivationReason = null;
         }
       }
 
