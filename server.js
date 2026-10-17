@@ -27,6 +27,22 @@ function getFinancialYearCode(date = new Date()) {
   return `${startStr}${endStr}`;
 }
 
+function cleanMobile(mob) {
+  if (!mob) return "";
+  const digits = String(mob).replace(/\D/g, "");
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+}
+
+function isPaymentForMemberOrPayer(p, { id, mobile, email } = {}) {
+  if (!p) return false;
+  if (id && p.payerId && String(p.payerId).trim() === String(id).trim()) return true;
+  const pMob = cleanMobile(p.payerMobile);
+  const targetMob = cleanMobile(mobile);
+  if (pMob && targetMob && pMob === targetMob) return true;
+  if (email && p.payerEmail && p.payerEmail.trim().toLowerCase() === String(email).trim().toLowerCase()) return true;
+  return false;
+}
+
 // Initial Sample Seed Data
 function getInitialData() {
   const fy = getFinancialYearCode();
@@ -640,10 +656,11 @@ const server = http.createServer((req, res) => {
 
       // RULE: Guard against duplicate Annual Membership payment for the same financial year
       const isMembershipPayment = head.code === "MEM" || head.type === "membership" || (head.title && head.title.toLowerCase().includes("membership"));
-      if (isMembershipPayment && (body.payerId || body.payerMobile)) {
+      if (isMembershipPayment && (body.payerId || body.payerMobile || body.payerEmail)) {
+        const payerQuery = { id: body.payerId, mobile: body.payerMobile, email: body.payerEmail };
         const existingMemPay = (data.payments || []).find((p) =>
-          (p.payerId === body.payerId || p.payerMobile === body.payerMobile) &&
-          (p.headCode === "MEM" || (p.headTitle && p.headTitle.toLowerCase().includes("membership"))) &&
+          isPaymentForMemberOrPayer(p, payerQuery) &&
+          (p.headCode === "MEM" || (p.headTitle && p.headTitle.toLowerCase().includes("membership")) || (p.invoiceNo && p.invoiceNo.includes("/MEM/"))) &&
           p.status === "success" &&
           (p.invoiceNo?.includes(`/${fy}/`) || (p.date && new Date(p.date) >= new Date('2026-04-01')))
         );
@@ -651,7 +668,20 @@ const server = http.createServer((req, res) => {
           res.writeHead(400, { "Content-Type": "application/json" });
           return res.end(JSON.stringify({
             success: false,
-            error: `Annual Membership for financial year ${fy} has already been paid (Tax Invoice: ${existingMemPay.invoiceNo}). Duplicate payment is not allowed.`
+            error: `Annual Membership for financial year ${fy} has already been paid (Tax Invoice: ${existingMemPay.invoiceNo}). A member can only pay annual membership once per financial year.`
+          }));
+        }
+
+        const existingActiveMem = (data.members || []).find((m) =>
+          (body.payerId && m.id === body.payerId) ||
+          (cleanMobile(body.payerMobile) && cleanMobile(m.mobile) === cleanMobile(body.payerMobile)) ||
+          (body.payerEmail && m.email && m.email.trim().toLowerCase() === String(body.payerEmail).trim().toLowerCase())
+        );
+        if (existingActiveMem && (existingActiveMem.lastPaidFY === fy || existingActiveMem.status === "active") && (data.payments || []).some(p => isPaymentForMemberOrPayer(p, existingActiveMem) && (p.headCode === "MEM" || (p.invoiceNo && p.invoiceNo.includes("/MEM/"))) && p.status === "success")) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({
+            success: false,
+            error: `Member '${existingActiveMem.name}' has already paid annual membership dues for FY ${fy}. Duplicate payment is not allowed.`
           }));
         }
       }
@@ -700,8 +730,12 @@ const server = http.createServer((req, res) => {
       data.payments.unshift(newPayment);
 
       // Auto-activate member if payment is for membership
-      if (isMembershipPayment && (payerId || payerMobile)) {
-        const mem = data.members.find((m) => m.id === payerId || m.mobile === payerMobile);
+      if (isMembershipPayment && (payerId || payerMobile || payerEmail)) {
+        const mem = data.members.find((m) =>
+          (payerId && m.id === payerId) ||
+          (cleanMobile(payerMobile) && cleanMobile(m.mobile) === cleanMobile(payerMobile)) ||
+          (payerEmail && m.email && m.email.trim().toLowerCase() === String(payerEmail).trim().toLowerCase())
+        );
         if (mem) {
           mem.status = "active";
           mem.lastPaidFY = fy;
@@ -981,43 +1015,53 @@ const server = http.createServer((req, res) => {
 
       let paymentRecord = null;
       if (body.createInvoice) {
-        const head = data.heads.find((h) => h.id === body.headId || h.code === "MEM") || data.heads[0];
-        if (head) {
-          const base = Number(head.prices[mem.category] || 10000);
-          const cgst = Math.round(base * 0.09 * 100) / 100;
-          const sgst = Math.round(base * 0.09 * 100) / 100;
-          const totalGst = Math.round((cgst + sgst) * 100) / 100;
-          const total = Math.round((base + totalGst) * 100) / 100;
-          const now = new Date().toISOString();
+        // Prevent duplicate invoice generation if member already has a tax invoice for this FY
+        const existingInvoice = (data.payments || []).find((p) =>
+          isPaymentForMemberOrPayer(p, mem) &&
+          (p.headCode === "MEM" || (p.headTitle && p.headTitle.toLowerCase().includes("membership")) || (p.invoiceNo && p.invoiceNo.includes("/MEM/"))) &&
+          p.status === "success"
+        );
+        if (existingInvoice) {
+          paymentRecord = existingInvoice;
+        } else {
+          const head = data.heads.find((h) => h.id === body.headId || h.code === "MEM") || data.heads[0];
+          if (head) {
+            const base = Number(head.prices[mem.category] || 10000);
+            const cgst = Math.round(base * 0.09 * 100) / 100;
+            const sgst = Math.round(base * 0.09 * 100) / 100;
+            const totalGst = Math.round((cgst + sgst) * 100) / 100;
+            const total = Math.round((base + totalGst) * 100) / 100;
+            const now = new Date().toISOString();
 
-          const nextSerial = (data.invoiceCounter || 0) + 1;
-          data.invoiceCounter = nextSerial;
-          const serialStr = String(nextSerial).padStart(4, "0");
-          const invoiceNo = `CREA/${fy}/${head.code.toUpperCase()}/${serialStr}`;
+            const nextSerial = (data.invoiceCounter || 0) + 1;
+            data.invoiceCounter = nextSerial;
+            const serialStr = String(nextSerial).padStart(4, "0");
+            const invoiceNo = `CREA/${fy}/${head.code.toUpperCase()}/${serialStr}`;
 
-          paymentRecord = {
-            id: `pay-${Date.now()}`,
-            invoiceNo,
-            serial: nextSerial,
-            date: now,
-            headId: head.id,
-            headCode: head.code,
-            headTitle: head.title,
-            payerType: "member",
-            payerCategory: mem.category,
-            payerId: mem.id,
-            payerName: mem.name,
-            payerMobile: mem.mobile,
-            payerEmail: mem.email,
-            baseAmount: base,
-            cgst,
-            sgst,
-            totalGst,
-            totalAmount: total,
-            status: "success",
-            method: `Manual Admin (${mem.paymentMeans}): ${mem.activationNote}`
-          };
-          data.payments.unshift(paymentRecord);
+            paymentRecord = {
+              id: `pay-${Date.now()}`,
+              invoiceNo,
+              serial: nextSerial,
+              date: now,
+              headId: head.id,
+              headCode: head.code,
+              headTitle: head.title,
+              payerType: "member",
+              payerCategory: mem.category,
+              payerId: mem.id,
+              payerName: mem.name,
+              payerMobile: mem.mobile,
+              payerEmail: mem.email,
+              baseAmount: base,
+              cgst,
+              sgst,
+              totalGst,
+              totalAmount: total,
+              status: "success",
+              method: `Manual Admin (${mem.paymentMeans}): ${mem.activationNote}`
+            };
+            data.payments.unshift(paymentRecord);
+          }
         }
       }
 

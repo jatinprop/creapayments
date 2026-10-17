@@ -536,14 +536,17 @@
           this.loadFromStorage();
         }
 
-        // Ensure heads have status
-        this.normalizeData();
-
-        // Restore member session
+        // Restore member session FIRST before normalization
         const savedMember = localStorage.getItem("crea_member");
         if (savedMember) {
-          try { this.loggedInMember = JSON.parse(savedMember); } catch(e){}
+          try {
+            const parsed = JSON.parse(savedMember);
+            this.loggedInMember = parsed;
+          } catch(e){}
         }
+
+        // Ensure heads and members are fully normalized and reconciled with payments
+        this.normalizeData();
 
         this.render();
       },
@@ -637,12 +640,59 @@
         return null;
       },
 
+      cleanMobile(mob) {
+        if (!mob) return '';
+        const digits = String(mob).replace(/\D/g, '');
+        return digits.length >= 10 ? digits.slice(-10) : digits;
+      },
+
+      isPaymentForMember(payment, member) {
+        if (!payment || !member) return false;
+        if (payment.payerId && member.id && String(payment.payerId).trim() === String(member.id).trim()) {
+          return true;
+        }
+        const pMob = this.cleanMobile(payment.payerMobile);
+        const mMob = this.cleanMobile(member.mobile);
+        if (pMob && mMob && pMob === mMob) {
+          return true;
+        }
+        if (payment.payerEmail && member.email) {
+          const pEmail = String(payment.payerEmail).trim().toLowerCase();
+          const mEmail = String(member.email).trim().toLowerCase();
+          if (pEmail && mEmail && pEmail === mEmail) {
+            return true;
+          }
+        }
+        return false;
+      },
+
+      findMember(query) {
+        if (!query || !this.data || !this.data.members) return null;
+        if (typeof query === 'object') {
+          return this.data.members.find(m =>
+            (query.id && m.id === query.id) ||
+            (query.mobile && this.cleanMobile(m.mobile) === this.cleanMobile(query.mobile)) ||
+            (query.email && m.email && m.email.trim().toLowerCase() === String(query.email).trim().toLowerCase())
+          ) || null;
+        }
+        const str = String(query).trim().toLowerCase();
+        const clean = this.cleanMobile(query);
+        return this.data.members.find(m =>
+          m.id === str ||
+          (clean && this.cleanMobile(m.mobile) === clean) ||
+          (m.email && m.email.trim().toLowerCase() === str)
+        ) || null;
+      },
+
       hasPaidMembershipForFY(member, fyCode) {
         if (!member) return false;
         const fy = fyCode || this.getFinancialYear().code;
 
+        // Ensure we check against fresh data in this.data.members if available
+        const memObj = this.findMember(member) || member;
+
         // 1. Check member.lastPaidFY
-        const val = member.lastPaidFY;
+        const val = memObj.lastPaidFY;
         if (val) {
           const s = String(typeof val === 'object' ? (val.code || val.label || '') : val);
           if (s === fy || s.includes(fy) || s.includes('2627') || s.includes('2026')) {
@@ -650,17 +700,25 @@
           }
         }
 
-        // 2. Check successful membership payments in the current FY
+        // 2. Check if already active member
+        if (memObj.status === 'active' && memObj.lastPaidFY) {
+          return true;
+        }
+
+        // 3. Check successful membership payments in the current FY
         const hasPayment = (this.data.payments || []).some(p => {
-          const isMemberMatch = p.payerId === member.id || p.payerMobile === member.mobile;
-          if (!isMemberMatch || p.status !== 'success') return false;
-          const isMemHead = p.headCode === 'MEM' || (p.headTitle && p.headTitle.toLowerCase().includes('membership'));
+          if (p.status !== 'success') return false;
+          if (!this.isPaymentForMember(p, memObj)) return false;
+
+          const isMemHead = p.headCode === 'MEM' ||
+            (p.headTitle && p.headTitle.toLowerCase().includes('membership')) ||
+            (p.invoiceNo && p.invoiceNo.includes('/MEM/'));
           if (!isMemHead) return false;
 
           if (p.invoiceNo && (p.invoiceNo.includes(`/${fy}/`) || p.invoiceNo.includes('/2627/'))) return true;
           if (p.headTitle && (p.headTitle.includes('2026-2027') || p.headTitle.includes('2026-27'))) return true;
           if (p.date && new Date(p.date) >= new Date('2026-04-01')) return true;
-          return false;
+          return true; // Any successful membership payment satisfies annual membership
         });
 
         return Boolean(hasPayment);
@@ -701,11 +759,7 @@
           if (m.category === "new_member") m.category = "associate_member";
 
           if (m.category !== "associate_member") {
-            const hasPaidCurrentFY = isFYPaid(m.lastPaidFY, fy.code) || (this.data.payments || []).some(p =>
-              (p.payerId === m.id || p.payerMobile === m.mobile) &&
-              (p.headCode === "MEM" || (p.headTitle && p.headTitle.toLowerCase().includes("membership"))) &&
-              p.status === "success"
-            );
+            const hasPaidCurrentFY = isFYPaid(m.lastPaidFY, fy.code) || this.hasPaidMembershipForFY(m, fy.code);
 
             if (hasPaidCurrentFY) {
               if (m.status !== "deactivated_manual") {
@@ -729,22 +783,14 @@
           if (m.category === "associate_member") {
             const mainMember = this.data.members.find(p =>
               (m.parentMemberId && p.id === m.parentMemberId) ||
-              (m.parentMemberMobile && p.mobile === m.parentMemberMobile) ||
+              (m.parentMemberMobile && this.cleanMobile(p.mobile) === this.cleanMobile(m.parentMemberMobile)) ||
               (m.parentMemberName && p.name && p.name.trim().toLowerCase() === m.parentMemberName.trim().toLowerCase())
             );
 
-            const mainMemberHasPaid = mainMember && (isFYPaid(mainMember.lastPaidFY, fy.code) || (this.data.payments || []).some(p =>
-              (p.payerId === mainMember.id || p.payerMobile === mainMember.mobile) &&
-              (p.headCode === "MEM" || (p.headTitle && p.headTitle.toLowerCase().includes("membership"))) &&
-              p.status === "success"
-            ));
-            const isMainMemberActive = mainMember && mainMember.status === "active" && mainMemberHasPaid;
+            const mainMemberHasPaid = mainMember && (isFYPaid(mainMember.lastPaidFY, fy.code) || this.hasPaidMembershipForFY(mainMember, fy.code));
+            const isMainMemberActive = mainMember && (mainMember.status === "active" || mainMemberHasPaid);
 
-            const hasAssociatePaid = isFYPaid(m.lastPaidFY, fy.code) || (this.data.payments || []).some(p =>
-              (p.payerId === m.id || p.payerMobile === m.mobile) &&
-              (p.headCode === "MEM" || (p.headTitle && p.headTitle.toLowerCase().includes("membership"))) &&
-              p.status === "success"
-            );
+            const hasAssociatePaid = isFYPaid(m.lastPaidFY, fy.code) || this.hasPaidMembershipForFY(m, fy.code);
 
             // Strict Rule: Main member MUST be active and paid.
             // If main member is unpaid, associate is DEACTIVATED irrespective of associate payment!
@@ -769,10 +815,19 @@
 
         // Sync loggedInMember session if active
         if (this.loggedInMember) {
-          const fresh = this.data.members.find(m => m.id === this.loggedInMember.id || m.mobile === this.loggedInMember.mobile);
+          const fresh = this.findMember(this.loggedInMember);
           if (fresh) {
-            this.loggedInMember = { ...fresh };
+            this.loggedInMember = { ...this.loggedInMember, ...fresh };
           }
+          if (this.hasPaidMembershipForFY(this.loggedInMember, fy.code)) {
+            if (this.loggedInMember.category !== 'associate_member') {
+              this.loggedInMember.status = 'active';
+            }
+            this.loggedInMember.lastPaidFY = fy.code;
+          }
+          try {
+            localStorage.setItem("crea_member", JSON.stringify(this.loggedInMember));
+          } catch(e) {}
         }
       },
 
@@ -956,7 +1011,7 @@
         const fy = this.getFinancialYear();
 
         // Member payments (all successful historical payments by this member)
-        const memberPayments = (this.data.payments || []).filter(p => (p.payerId === member.id || p.payerMobile === member.mobile) && p.status === 'success');
+        const memberPayments = (this.data.payments || []).filter(p => this.isPaymentForMember(p, member) && p.status === 'success');
 
         // Check if member has already paid annual membership for this financial year
         const isMemPaid = this.hasPaidMembershipForFY(member, fy.code);
@@ -2160,7 +2215,7 @@ ${head.writeup || 'No detailed write-up provided.'}
           // GUARD: Check if already registered for an event
           if (!isMem) {
             const alreadyRegistered = (this.data.payments || []).some(p =>
-              (p.payerId === this.loggedInMember.id || p.payerMobile === this.loggedInMember.mobile) &&
+              this.isPaymentForMember(p, this.loggedInMember) &&
               (p.headId === head.id || p.headCode === head.code) &&
               p.status === 'success'
             );
@@ -2312,10 +2367,25 @@ ${head.writeup || 'No detailed write-up provided.'}
         const fy = this.getFinancialYear();
 
         // 1. Client-side guard against duplicate annual membership payment
-        if (isMem && (payerId || payerMobile)) {
-          const targetMem = this.data.members.find(m => m.id === payerId || m.mobile === payerMobile) || (this.loggedInMember && (this.loggedInMember.id === payerId || this.loggedInMember.mobile === payerMobile) ? this.loggedInMember : null);
+        if (isMem) {
+          const targetMem = this.findMember({ id: payerId, mobile: payerMobile, email: payerEmail }) ||
+            (this.loggedInMember && (this.loggedInMember.id === payerId || this.cleanMobile(this.loggedInMember.mobile) === this.cleanMobile(payerMobile)) ? this.loggedInMember : null);
+
           if (targetMem && this.hasPaidMembershipForFY(targetMem, fy.code)) {
             alert(`⚠️ CREA(I) Annual Membership for ${fy.label} has already been paid for ${targetMem.name}.\n\nA member can only pay annual membership once per financial year.`);
+            this.closeModal();
+            this.render();
+            return;
+          }
+
+          const hasExistingMem = (this.data.payments || []).some(p => {
+            if (p.status !== 'success') return false;
+            const isHeadMem = p.headCode === 'MEM' || (p.headTitle && p.headTitle.toLowerCase().includes('membership')) || (p.invoiceNo && p.invoiceNo.includes('/MEM/'));
+            if (!isHeadMem) return false;
+            return this.isPaymentForMember(p, { id: payerId, mobile: payerMobile, email: payerEmail });
+          });
+          if (hasExistingMem) {
+            alert(`⚠️ CREA(I) Annual Membership for ${fy.label} has already been recorded for this member.\n\nA member cannot pay annual membership twice.`);
             this.closeModal();
             this.render();
             return;
@@ -2350,10 +2420,17 @@ ${head.writeup || 'No detailed write-up provided.'}
             this.normalizeData();
             // Sync loggedInMember with refreshed member data
             if (this.loggedInMember) {
-              const fresh = this.data.members.find(m => m.id === this.loggedInMember.id || m.mobile === this.loggedInMember.mobile);
+              const fresh = this.findMember(this.loggedInMember);
               if (fresh) {
-                this.loggedInMember = { ...fresh };
+                this.loggedInMember = { ...this.loggedInMember, ...fresh };
               }
+              if (this.hasPaidMembershipForFY(this.loggedInMember, fy.code)) {
+                this.loggedInMember.lastPaidFY = fy.code;
+                this.loggedInMember.status = 'active';
+              }
+              try {
+                localStorage.setItem("crea_member", JSON.stringify(this.loggedInMember));
+              } catch(e) {}
             }
             this.saveToStorage();
             this.render();
@@ -2371,6 +2448,21 @@ ${head.writeup || 'No detailed write-up provided.'}
         }
 
         // Fallback offline execution
+        if (isMem) {
+          const hasExisting = (this.data.payments || []).some(p => {
+            if (p.status !== 'success') return false;
+            const isHeadMem = p.headCode === 'MEM' || (p.headTitle && p.headTitle.toLowerCase().includes('membership')) || (p.invoiceNo && p.invoiceNo.includes('/MEM/'));
+            if (!isHeadMem) return false;
+            return this.isPaymentForMember(p, { id: payerId, mobile: payerMobile, email: payerEmail });
+          });
+          if (hasExisting) {
+            alert(`⚠️ Duplicate payment prevented: Annual Membership for ${fy.label} has already been recorded.`);
+            this.closeModal();
+            this.render();
+            return;
+          }
+        }
+
         const nextSerial = (this.data.invoiceCounter || 0) + 1;
         this.data.invoiceCounter = nextSerial;
         const serialStr = String(nextSerial).padStart(4, "0");
@@ -2419,8 +2511,8 @@ ${head.writeup || 'No detailed write-up provided.'}
         });
 
         // If membership payment, auto-activate the member offline
-        if (isMem && (payerId || payerMobile)) {
-          const mem = this.data.members.find(m => m.id === payerId || m.mobile === payerMobile);
+        if (isMem && (payerId || payerMobile || payerEmail)) {
+          const mem = this.findMember({ id: payerId, mobile: payerMobile, email: payerEmail });
           if (mem) {
             mem.status = "active";
             mem.lastPaidFY = fy.code;
@@ -2431,7 +2523,7 @@ ${head.writeup || 'No detailed write-up provided.'}
               mem.company = payerCompany;
             }
           }
-          if (this.loggedInMember && (this.loggedInMember.id === payerId || this.loggedInMember.mobile === payerMobile)) {
+          if (this.loggedInMember && (this.loggedInMember.id === payerId || this.cleanMobile(this.loggedInMember.mobile) === this.cleanMobile(payerMobile) || (payerEmail && this.loggedInMember.email && this.loggedInMember.email.toLowerCase() === payerEmail.toLowerCase()))) {
             this.loggedInMember.status = "active";
             this.loggedInMember.lastPaidFY = fy.code;
             if (payerCompany && (!this.loggedInMember.company || this.loggedInMember.company === "Independent Realtor")) {
@@ -2439,6 +2531,9 @@ ${head.writeup || 'No detailed write-up provided.'}
             }
           }
           this.normalizeData();
+          try {
+            localStorage.setItem("crea_member", JSON.stringify(this.loggedInMember));
+          } catch(e) {}
         }
 
         this.saveToStorage();
@@ -4207,45 +4302,55 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         let generatedInvoiceNo = null;
 
         if (createInvoice && memHead) {
-          const base = Number(this.getHeadPrice(memHead, mem.category) || (mem.category === 'associate_member' ? 5000 : 10000));
-          const cgst = Math.round(base * 0.09 * 100) / 100;
-          const sgst = Math.round(base * 0.09 * 100) / 100;
-          const totalGst = Math.round((cgst + sgst) * 100) / 100;
-          const totalAmount = Math.round((base + totalGst) * 100) / 100;
+          const existingMemInvoice = (this.data.payments || []).find(p =>
+            p.status === 'success' &&
+            this.isPaymentForMember(p, mem) &&
+            (p.headCode === 'MEM' || (p.headTitle && p.headTitle.toLowerCase().includes('membership')) || (p.invoiceNo && p.invoiceNo.includes('/MEM/')))
+          );
 
-          const nextSerial = (this.data.invoiceCounter || 0) + 1;
-          this.data.invoiceCounter = nextSerial;
-          const serialStr = String(nextSerial).padStart(4, "0");
-          generatedInvoiceNo = `CREA/${currentFY.code}/${memHead.code.toUpperCase()}/${serialStr}`;
+          if (existingMemInvoice) {
+            generatedInvoiceNo = existingMemInvoice.invoiceNo;
+          } else {
+            const base = Number(this.getHeadPrice(memHead, mem.category) || (mem.category === 'associate_member' ? 5000 : 10000));
+            const cgst = Math.round(base * 0.09 * 100) / 100;
+            const sgst = Math.round(base * 0.09 * 100) / 100;
+            const totalGst = Math.round((cgst + sgst) * 100) / 100;
+            const totalAmount = Math.round((base + totalGst) * 100) / 100;
 
-          const paymentRecord = {
-            id: `pay-${Date.now()}`,
-            invoiceNo: generatedInvoiceNo,
-            serial: nextSerial,
-            date: new Date().toISOString(),
-            headId: memHead.id,
-            headCode: memHead.code,
-            headTitle: memHead.title,
-            payerType: "member",
-            payerCategory: mem.category,
-            payerId: mem.id,
-            payerName: mem.name,
-            payerMobile: mem.mobile,
-            payerEmail: mem.email,
-            payerGstin: mem.gstin || "",
-            payerAddress: mem.address || "",
-            attended: false,
-            giftCollected: false,
-            baseAmount: base,
-            cgst,
-            sgst,
-            totalGst,
-            totalAmount,
-            status: "success",
-            method: `Manual Admin (${paymentMeans}): ${description}`
-          };
+            const nextSerial = (this.data.invoiceCounter || 0) + 1;
+            this.data.invoiceCounter = nextSerial;
+            const serialStr = String(nextSerial).padStart(4, "0");
+            generatedInvoiceNo = `CREA/${currentFY.code}/${memHead.code.toUpperCase()}/${serialStr}`;
 
-          this.data.payments.unshift(paymentRecord);
+            const paymentRecord = {
+              id: `pay-${Date.now()}`,
+              invoiceNo: generatedInvoiceNo,
+              serial: nextSerial,
+              date: new Date().toISOString(),
+              headId: memHead.id,
+              headCode: memHead.code,
+              headTitle: memHead.title,
+              payerType: "member",
+              payerCategory: mem.category,
+              payerId: mem.id,
+              payerName: mem.name,
+              payerMobile: mem.mobile,
+              payerEmail: mem.email,
+              payerGstin: mem.gstin || "",
+              payerAddress: mem.address || "",
+              attended: false,
+              giftCollected: false,
+              baseAmount: base,
+              cgst,
+              sgst,
+              totalGst,
+              totalAmount,
+              status: "success",
+              method: `Manual Admin (${paymentMeans}): ${description}`
+            };
+
+            this.data.payments.unshift(paymentRecord);
+          }
         }
 
         try {
