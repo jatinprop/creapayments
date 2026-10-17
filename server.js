@@ -1409,6 +1409,21 @@ const server = http.createServer((req, res) => {
     }
   }
 
+  // Helper to find index.html from multiple possible working directories
+  const resolveIndexHtml = () => {
+    const candidates = [
+      path.join(__dirname, "index.html"),
+      path.join(process.cwd(), "index.html"),
+      path.join(process.cwd(), "CREA APP", "index.html")
+    ];
+    for (const c of candidates) {
+      try {
+        if (fs.existsSync(c)) return fs.readFileSync(c, "utf8");
+      } catch (e) {}
+    }
+    return null;
+  };
+
   // Serve Static index.html or files
   let filePath = path.join(__dirname, pathname === "/" ? "index.html" : pathname);
 
@@ -1416,15 +1431,13 @@ const server = http.createServer((req, res) => {
     if (err) {
       if (err.code === "ENOENT") {
         // Fallback to index.html for SPA routing
-        fs.readFile(path.join(__dirname, "index.html"), (err2, fallbackContent) => {
-          if (err2) {
-            res.writeHead(404, { "Content-Type": "text/plain" });
-            return res.end("Not Found");
-          }
+        const html = resolveIndexHtml();
+        if (html) {
           res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-          return res.end(fallbackContent);
-        });
-        return;
+          return res.end(html);
+        }
+        res.writeHead(404, { "Content-Type": "text/plain" });
+        return res.end("Not Found");
       }
       res.writeHead(500);
       return res.end(`Server Error: ${err.code}`);
@@ -1448,11 +1461,15 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`\n======================================================`);
-  console.log(`🏛️ CREA(I) Payment & Membership Management Suite Live`);
-  console.log(`URL: http://localhost:${PORT}`);
-  console.log(`Root Path: ${__dirname}`);
-  console.log(`Admin PIN: crea-admin`);
-  console.log(`======================================================\n`);
-});
+if (!process.env.VERCEL) {
+  server.listen(PORT, () => {
+    console.log(`\n======================================================`);
+    console.log(`🏛️ CREA(I) Payment & Membership Management Suite Live`);
+    console.log(`URL: http://localhost:${PORT}`);
+    console.log(`Root Path: ${__dirname}`);
+    console.log(`Admin PIN: crea-admin`);
+    console.log(`======================================================\n`);
+  });
+}
+
+export default server;

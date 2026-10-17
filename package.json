@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "type": "module",
   "description": "CREA(I) - Confederation of Real Estate Associates (India) Payment & Membership Management Portal",
-  "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
