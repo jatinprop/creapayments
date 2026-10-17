@@ -845,18 +845,25 @@
         const now = new Date();
         const fy = this.getFinancialYear();
 
-        // Heads visible to this member's category - sort MEM first
-        const visibleHeads = this.data.heads.filter(h => {
-          const price = h.prices[member.category];
-          return price !== null && price !== undefined;
+        // Member payments (all successful historical payments by this member)
+        const memberPayments = (this.data.payments || []).filter(p => (p.payerId === member.id || p.payerMobile === member.mobile) && p.status === 'success');
+
+        // Find current active membership head
+        const memHead = (this.data.heads || []).find(h => (h.code === 'MEM' || h.type === 'membership') && h.status === 'active' && !h.isDeleted && h.status !== 'deleted');
+        const isMemPaid = memberPayments.some(p => p.headCode === 'MEM' || (p.headTitle && p.headTitle.toLowerCase().includes('membership')));
+
+        // Open Heads available for payment - STRICTLY ACTIVE ONLY
+        // Deactivated, deleted, expired, or already-paid events are completely omitted
+        const activeOpenHeads = (this.data.heads || []).filter(h => {
+          const isDeactivated = h.status === 'deactivated' || h.status === 'inactive';
+          const isDeleted = h.status === 'deleted' || h.isDeleted;
+          const isExpired = h.activeUntil && new Date(h.activeUntil) < now;
+          const price = h.prices ? h.prices[member.category] : null;
+          const hasPrice = price !== null && price !== undefined && price !== "";
+          const alreadyPaid = memberPayments.some(p => p.headId === h.id || p.headCode === h.code);
+
+          return !isDeactivated && !isDeleted && !isExpired && hasPrice && !alreadyPaid;
         }).sort((a, b) => (a.code === 'MEM' ? -1 : b.code === 'MEM' ? 1 : 0));
-
-        // Find current membership head
-        const memHead = this.data.heads.find(h => h.code === 'MEM');
-        const isMemPaid = this.data.payments.some(p => (p.payerId === member.id || p.payerMobile === member.mobile) && (p.headCode === 'MEM' || (p.headTitle && p.headTitle.includes('Membership'))) && p.status === 'success');
-
-        // Map payments for this member
-        const memberPayments = this.data.payments.filter(p => p.payerId === member.id || p.payerMobile === member.mobile);
 
         return `
           <!-- Member Greeting Card -->
@@ -949,109 +956,211 @@
             </div>
           ` : ''}
 
-          <!-- Section Title -->
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <div>
-              <h3 style="font-size: 18px; font-weight: 700;">Open Registrations & Payment Heads</h3>
-              <p style="font-size: 13px; color: var(--text-muted);">Pricing shown according to your <strong>${member.category.replace('_', ' ').toUpperCase()}</strong> accreditation (18% GST added at payment).</p>
+          <!-- SECTION 1: MY REGISTERED & PAID PROGRAMS (INVOICES, PASSES & CERTIFICATES) -->
+          <!-- Renders if a payment was made for an event (even if the event subsequently closes or is deactivated) -->
+          ${memberPayments.length > 0 ? `
+            <div style="margin-bottom: 30px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+                <div>
+                  <h3 style="font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                    <span style="color: #34d399;">✓</span> <span>My Registered Programs & Tax Invoices</span>
+                  </h3>
+                  <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">
+                    All confirmed registrations, official GST tax invoices, attendance gate QR passes, and gift collection vouchers.
+                  </p>
+                </div>
+                <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);">
+                  ${memberPayments.length} Registered Program${memberPayments.length > 1 ? 's' : ''}
+                </span>
+              </div>
+
+              <div class="heads-grid">
+                ${memberPayments.map(p => {
+                  const h = (this.data.heads || []).find(x => x.id === p.headId || x.code === p.headCode) || {
+                    id: p.headId,
+                    code: p.headCode,
+                    title: p.headTitle,
+                    type: (p.headCode === 'MEM' || (p.headTitle && p.headTitle.toLowerCase().includes('membership'))) ? 'membership' : 'training',
+                    eventDate: new Date(p.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
+                    eventTime: 'Access Granted',
+                    venue: 'CREA(I) Headquarters & Conclave Venues'
+                  };
+                  const isMem = (p.headCode === 'MEM' || h.type === 'membership' || (p.headTitle && p.headTitle.toLowerCase().includes('membership')));
+
+                  return `
+                    <div class="head-card" style="border-color: rgba(16, 185, 129, 0.4); background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(15, 23, 42, 0.95) 100%);">
+                      <div>
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                          <span class="badge badge-open">${p.headCode} • ${isMem ? 'MEMBERSHIP' : 'TRAINING / EVENT'}</span>
+                          <span class="badge badge-paid">✓ PAID & CONFIRMED</span>
+                        </div>
+
+                        <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 10px; color: #ffffff; line-height: 1.4;">
+                          ${p.headTitle}
+                        </h4>
+
+                        <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
+                          <div>📅 <strong>Schedule:</strong> ${h.eventDate || 'Confirmed'} ${h.eventTime ? `(${h.eventTime})` : ''}</div>
+                          <div>📍 <strong>Venue:</strong> ${h.venue || 'CREA(I) Centre, Bangalore'}</div>
+                          <div>📑 <strong>Tax Invoice:</strong> <strong style="color: #38bdf8;">${p.invoiceNo}</strong></div>
+                        </div>
+
+                        ${!isMem ? `
+                          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;">
+                            ${p.attended ? `
+                              <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #059669; font-size: 11px;">
+                                ✓ Gate Entry Verified
+                              </span>
+                            ` : `
+                              <span class="badge" style="background: rgba(2, 132, 199, 0.2); color: #38bdf8; border: 1px solid #0284c7; font-size: 11px;">
+                                ● Valid for Gate Entry
+                              </span>
+                            `}
+
+                            ${p.giftCollected ? `
+                              <span class="badge" style="background: rgba(217, 119, 6, 0.2); color: #fbbf24; border: 1px solid #d97706; font-size: 11px;">
+                                ✓ Gift Claimed
+                              </span>
+                            ` : `
+                              <span class="badge" style="background: rgba(217, 119, 6, 0.2); color: #fbbf24; border: 1px solid #d97706; font-size: 11px;">
+                                🎁 1 Welcome Kit Redeemable
+                              </span>
+                            `}
+                          </div>
+                        ` : ''}
+                      </div>
+
+                      <div style="border-top: 1px solid var(--card-border); padding-top: 16px;">
+                        <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
+                          <span style="color: var(--text-muted);">Amount Paid (incl. 18% GST):</span>
+                          <span style="color: #34d399; font-size: 14px; font-weight: 800;">₹${p.totalAmount.toLocaleString('en-IN')}</span>
+                        </div>
+
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                          <button onclick="app.viewInvoice('${p.invoiceNo}')" class="btn btn-success btn-sm" style="flex: 1.4; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+                            <span>✓</span> <span>Tax Invoice & QR Passes</span>
+                          </button>
+
+                          ${isMem ? `
+                            <button onclick="app.openCertificateModal('${p.invoiceNo}', '${member.id}')" class="btn btn-secondary btn-sm" style="color: #fbbf24; border-color: rgba(251, 191, 36, 0.4); font-weight: 700; padding: 6px 10px;" title="Download Official Membership Certificate">
+                              🎓 Certificate
+                            </button>
+                          ` : ''}
+
+                          <button onclick="app.showHeadDetails('${h.id}')" class="btn btn-secondary btn-sm" style="flex: 0.8;">
+                            📄 Details
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
             </div>
-            <span style="font-size: 12px; color: var(--text-dim);">${visibleHeads.length} Available Programs</span>
+          ` : ''}
+
+          <!-- SECTION 2: OPEN PROGRAMS & REGISTRATIONS AVAILABLE TO PAY -->
+          <!-- Strictly displays ONLY active events. Deactivated and deleted events are completely omitted. -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <h3 style="font-size: 18px; font-weight: 700;">Open Registrations & Programs</h3>
+              <p style="font-size: 13px; color: var(--text-muted);">Available programs accepting payment. Pricing according to your <strong>${member.category.replace('_', ' ').toUpperCase()}</strong> tier (18% GST added at payment).</p>
+            </div>
+            <span style="font-size: 12px; color: var(--text-dim);">${activeOpenHeads.length} Active Program${activeOpenHeads.length !== 1 ? 's' : ''} Open</span>
           </div>
 
-          <!-- Heads Grid -->
-          <div class="heads-grid">
-            ${visibleHeads.map(h => {
-              const basePrice = h.prices[member.category];
-              const cgst = Math.round(basePrice * 0.09 * 100) / 100;
-              const sgst = Math.round(basePrice * 0.09 * 100) / 100;
-              const totalAmount = Math.round((basePrice + cgst + sgst) * 100) / 100;
+          ${activeOpenHeads.length === 0 ? `
+            <div class="glass-card" style="text-align: center; padding: 36px 20px; background: rgba(15, 23, 42, 0.6); border: 1px dashed var(--card-border); margin-bottom: 24px;">
+              <div style="font-size: 38px; margin-bottom: 10px;">✨</div>
+              <h4 style="font-size: 16px; font-weight: 700; color: #ffffff; margin-bottom: 6px;">You're All Caught Up!</h4>
+              <p style="font-size: 13px; color: var(--text-muted); max-width: 520px; margin: 0 auto; line-height: 1.5;">
+                There are currently no additional open programs pending payment. All active programs have either been registered by you above, or new training sessions will be announced soon.
+              </p>
+            </div>
+          ` : `
+            <!-- Open Active Heads Grid -->
+            <div class="heads-grid">
+              ${activeOpenHeads.map(h => {
+                const basePrice = Number(h.prices[member.category]);
+                const cgst = Math.round(basePrice * 0.09 * 100) / 100;
+                const sgst = Math.round(basePrice * 0.09 * 100) / 100;
+                const totalAmount = Math.round((basePrice + cgst + sgst) * 100) / 100;
 
-              const isPaid = memberPayments.find(p => p.headId === h.id || p.headCode === h.code);
-              const isExpired = h.activeUntil && new Date(h.activeUntil) < now;
-              const isDeactivated = h.status === 'deactivated' || h.status === 'inactive';
-
-              return `
-                <div class="head-card" style="${isDeactivated ? 'border-color: rgba(239, 68, 68, 0.35); opacity: 0.9;' : ''}">
-                  <div>
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                      <span class="badge badge-open">${h.code} • ${h.type.toUpperCase()}</span>
-                      ${isPaid ? `<span class="badge badge-paid">✓ PAID</span>` : isDeactivated ? `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">⏸ DEACTIVATED</span>` : isExpired ? `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">EXPIRED</span>` : `<span class="badge badge-open">OPEN</span>`}
-                    </div>
-
-                    <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 10px; color: #ffffff; line-height: 1.4;">
-                      ${h.title}
-                    </h4>
-
-                    <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
-                      <div>📅 <strong>Date:</strong> ${h.eventDate} (${h.eventTime})</div>
-                      <div>📍 <strong>Venue:</strong> ${h.venue}</div>
-                      <div>⏳ <strong>Closes:</strong> ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                    </div>
-
-                    ${isDeactivated ? `
-                      <div style="background: rgba(239, 68, 68, 0.08); border: 1px dashed rgba(239, 68, 68, 0.35); border-radius: 6px; padding: 6px 10px; font-size: 11.5px; color: #fca5a5; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
-                        <span>⏸</span> <span>This program is temporarily deactivated by administration. Registrations are paused.</span>
+                return `
+                  <div class="head-card">
+                    <div>
+                      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                        <span class="badge badge-open">${h.code} • ${h.type.toUpperCase()}</span>
+                        <span class="badge badge-open">● OPEN</span>
                       </div>
-                    ` : ''}
-                  </div>
 
-                  <div style="border-top: 1px solid var(--card-border); padding-top: 16px;">
-                    <!-- Price Breakdown Box -->
-                    <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px;">
-                      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                        <span style="color: var(--text-muted);">Base Fee (excl. GST):</span>
-                        <span style="color: #ffffff; font-weight: 600;">₹${basePrice.toLocaleString('en-IN')}</span>
-                      </div>
-                      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                        <span style="color: var(--text-muted);">GST (18% - CGST 9% + SGST 9%):</span>
-                        <span style="color: #38bdf8; font-weight: 600;">+₹${(cgst + sgst).toLocaleString('en-IN')}</span>
-                      </div>
-                      <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; border-top: 1px solid #1e293b; padding-top: 4px; color: #ffffff;">
-                        <span>Total Payable:</span>
-                        <span style="color: #34d399;">₹${totalAmount.toLocaleString('en-IN')}</span>
+                      <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 10px; color: #ffffff; line-height: 1.4;">
+                        ${h.title}
+                      </h4>
+
+                      <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
+                        <div>📅 <strong>Date:</strong> ${h.eventDate} (${h.eventTime})</div>
+                        <div>📍 <strong>Venue:</strong> ${h.venue}</div>
+                        <div>⏳ <strong>Closes:</strong> ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                       </div>
                     </div>
 
-                    <div style="display: flex; gap: 8px;">
-                      <button onclick="app.showHeadDetails('${h.id}')" class="btn btn-secondary btn-sm" style="flex: 1;">
-                        📄 Event Details
-                      </button>
+                    <div style="border-top: 1px solid var(--card-border); padding-top: 16px;">
+                      <!-- Price Breakdown Box -->
+                      <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                          <span style="color: var(--text-muted);">Base Fee (excl. GST):</span>
+                          <span style="color: #ffffff; font-weight: 600;">₹${basePrice.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                          <span style="color: var(--text-muted);">GST (18% - CGST 9% + SGST 9%):</span>
+                          <span style="color: #38bdf8; font-weight: 600;">+₹${(cgst + sgst).toLocaleString('en-IN')}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; border-top: 1px solid #1e293b; padding-top: 4px; color: #ffffff;">
+                          <span>Total Payable:</span>
+                          <span style="color: #34d399;">₹${totalAmount.toLocaleString('en-IN')}</span>
+                        </div>
+                      </div>
 
-                      ${isPaid ? `
-                        <button onclick="app.viewInvoice('${isPaid.invoiceNo}')" class="btn btn-success btn-sm" style="flex: 1;">
-                          ✓ Invoice ${isPaid.invoiceNo.split('/').slice(-2).join('/')}
+                      <div style="display: flex; gap: 8px;">
+                        <button onclick="app.showHeadDetails('${h.id}')" class="btn btn-secondary btn-sm" style="flex: 1;">
+                          📄 Event Details
                         </button>
-                        ${(h.code === 'MEM' || h.type === 'membership') ? `
-                          <button onclick="app.openCertificateModal('${isPaid.invoiceNo}', '${member.id}')" class="btn btn-secondary btn-sm" style="color: #fbbf24; border-color: rgba(251, 191, 36, 0.4); font-weight: 700; padding: 4px 8px;" title="Download Membership Certificate">
-                            🎓 Certificate
-                          </button>
-                        ` : ''}
-                      ` : isDeactivated ? `
-                        <button disabled class="btn btn-secondary btn-sm" style="flex: 1.5; opacity: 0.6; cursor: not-allowed; background: #1e293b; color: #94a3b8;" title="Registrations paused by administration">
-                          ⏸ Deactivated
-                        </button>
-                      ` : isExpired ? `
-                        <button disabled class="btn btn-secondary btn-sm" style="flex: 1.5; opacity: 0.5; cursor: not-allowed;">
-                          Registration Closed
-                        </button>
-                      ` : `
                         <button onclick="app.openPaymentModal('${h.id}', 'member')" class="btn btn-primary btn-sm" style="flex: 1.5;">
                           Pay ₹${totalAmount.toLocaleString('en-IN')} →
                         </button>
-                      `}
+                      </div>
                     </div>
                   </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
+                `;
+              }).join('')}
+            </div>
+          `}
         `;
       },
 
       // TAB 2: NON-MEMBER (GUEST) CHECKOUT
       renderGuestPortal() {
         const now = new Date();
-        const nonMemberHeads = this.data.heads.filter(h => h.prices.non_member !== null && h.prices.non_member !== undefined);
+
+        // Strictly omit deactivated, deleted, or expired events
+        const activeNonMemberHeads = (this.data.heads || []).filter(h => {
+          const isDeactivated = h.status === 'deactivated' || h.status === 'inactive';
+          const isDeleted = h.status === 'deleted' || h.isDeleted;
+          const isExpired = h.activeUntil && new Date(h.activeUntil) < now;
+          const price = h.prices ? h.prices.non_member : null;
+          const hasPrice = price !== null && price !== undefined && price !== "";
+
+          return !isDeactivated && !isDeleted && !isExpired && hasPrice;
+        });
+
+        const guestMobile = (this.guestInfo.mobile || "").trim();
+        const guestEmail = (this.guestInfo.email || "").trim().toLowerCase();
+        const guestPayments = (guestMobile || guestEmail) ? (this.data.payments || []).filter(p => {
+          const matchMob = guestMobile && p.payerMobile === guestMobile;
+          const matchEmail = guestEmail && (p.payerEmail || "").toLowerCase() === guestEmail;
+          return (matchMob || matchEmail) && p.status === 'success';
+        }) : [];
 
         return `
           <div style="margin-bottom: 28px;">
@@ -1060,7 +1169,7 @@
                 Non-Member & Guest Registration Portal
               </h2>
               <p style="font-size: 13.5px; color: var(--text-muted); line-height: 1.5;">
-                Welcome to CREA(I). Non-member real estate professionals, independent brokers, and guests can register for open trainings and conclaves below. Enter your contact details to generate your GST tax invoice.
+                Welcome to CREA(I). Non-member real estate professionals, independent brokers, and guests can register for open trainings and conclaves below. Enter your contact details to generate your GST tax invoice and entry passes.
               </p>
 
               <!-- Guest Contact Details Form -->
@@ -1071,11 +1180,11 @@
                 </div>
                 <div>
                   <label class="form-label">Mobile Number *</label>
-                  <input type="text" id="guest-mobile" value="${this.guestInfo.mobile}" oninput="app.guestInfo.mobile = this.value" placeholder="e.g. 9845112233" class="form-input">
+                  <input type="text" id="guest-mobile" value="${this.guestInfo.mobile}" oninput="app.guestInfo.mobile = this.value; app.render();" placeholder="e.g. 9845112233" class="form-input">
                 </div>
                 <div>
                   <label class="form-label">Email Address (for Invoice) *</label>
-                  <input type="email" id="guest-email" value="${this.guestInfo.email}" oninput="app.guestInfo.email = this.value" placeholder="e.g. sid@urbanestates.in" class="form-input">
+                  <input type="email" id="guest-email" value="${this.guestInfo.email}" oninput="app.guestInfo.email = this.value; app.render();" placeholder="e.g. sid@urbanestates.in" class="form-input">
                 </div>
                 <div>
                   <label class="form-label">GSTIN (Optional / For Tax Credit)</label>
@@ -1089,79 +1198,117 @@
             </div>
           </div>
 
-          <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 16px;">
-            Programs Open to Non-Members
-          </h3>
-
-          <div class="heads-grid">
-            ${nonMemberHeads.map(h => {
-              const basePrice = h.prices.non_member;
-              const cgst = Math.round(basePrice * 0.09 * 100) / 100;
-              const sgst = Math.round(basePrice * 0.09 * 100) / 100;
-              const totalAmount = Math.round((basePrice + cgst + sgst) * 100) / 100;
-              const isExpired = h.activeUntil && new Date(h.activeUntil) < now;
-              const isDeactivated = h.status === 'deactivated' || h.status === 'inactive';
-
-              return `
-                <div class="head-card" style="${isDeactivated ? 'border-color: rgba(239, 68, 68, 0.35); opacity: 0.9;' : ''}">
-                  <div>
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                      <span class="badge badge-non_member">${h.code} • ${h.type.toUpperCase()}</span>
-                      ${isDeactivated ? `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">⏸ DEACTIVATED</span>` : isExpired ? `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171;">EXPIRED</span>` : `<span class="badge badge-open">GUEST SEATS OPEN</span>`}
-                    </div>
-
-                    <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 10px; color: #ffffff; line-height: 1.4;">
-                      ${h.title}
-                    </h4>
-
-                    <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
-                      <div>📅 <strong>Date:</strong> ${h.eventDate} (${h.eventTime})</div>
-                      <div>📍 <strong>Venue:</strong> ${h.venue}</div>
-                      <div>⏳ <strong>Closes:</strong> ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                    </div>
-
-                    ${isDeactivated ? `
-                      <div style="background: rgba(239, 68, 68, 0.08); border: 1px dashed rgba(239, 68, 68, 0.35); border-radius: 6px; padding: 6px 10px; font-size: 11.5px; color: #fca5a5; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
-                        <span>⏸</span> <span>This program is temporarily deactivated by administration. Registrations are paused.</span>
-                      </div>
-                    ` : ''}
-                  </div>
-
-                  <div style="border-top: 1px solid var(--card-border); padding-top: 16px;">
-                    <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px;">
-                      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                        <span style="color: var(--text-muted);">Guest Fee (excl. GST):</span>
-                        <span style="color: #ffffff; font-weight: 600;">₹${basePrice.toLocaleString('en-IN')}</span>
-                      </div>
-                      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                        <span style="color: var(--text-muted);">GST (18% - CGST 9% + SGST 9%):</span>
-                        <span style="color: #38bdf8; font-weight: 600;">+₹${(cgst + sgst).toLocaleString('en-IN')}</span>
-                      </div>
-                      <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; border-top: 1px solid #1e293b; padding-top: 4px; color: #ffffff;">
-                        <span>Total Payable:</span>
-                        <span style="color: #34d399;">₹${totalAmount.toLocaleString('en-IN')}</span>
-                      </div>
-                    </div>
-
-                    <div style="display: flex; gap: 8px;">
-                      <button onclick="app.showHeadDetails('${h.id}')" class="btn btn-secondary btn-sm" style="flex: 1;">
-                        📄 Details
-                      </button>
-                      ${isDeactivated ? `
-                        <button disabled class="btn btn-secondary btn-sm" style="flex: 1.5; opacity: 0.6; cursor: not-allowed; background: #1e293b; color: #94a3b8;" title="Registrations paused by administration">
-                          ⏸ Deactivated
-                        </button>
-                      ` : `
-                        <button onclick="app.openPaymentModal('${h.id}', 'guest')" class="btn btn-primary btn-sm" style="flex: 1.5;" ${isExpired ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
-                          ${isExpired ? 'Registration Closed' : `Pay ₹${totalAmount.toLocaleString('en-IN')} →`}
-                        </button>
-                      `}
-                    </div>
-                  </div>
+          <!-- Existing Guest Registrations / Invoices (If payment was made for an event) -->
+          ${guestPayments.length > 0 ? `
+            <div class="glass-card" style="margin-bottom: 26px; border-left: 4px solid #10b981; background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.9) 100%);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+                <div>
+                  <h4 style="font-size: 16px; font-weight: 700; color: #34d399; margin: 0; display: flex; align-items: center; gap: 8px;">
+                    <span>✓</span> <span>Found ${guestPayments.length} Existing Registration${guestPayments.length > 1 ? 's' : ''} for ${this.guestInfo.name ? this.guestInfo.name : 'Your Contact'}</span>
+                  </h4>
+                  <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                    Your official GST tax invoices, entry QR passes, and welcome kit claim vouchers are ready for download.
+                  </p>
                 </div>
-              `;
-            }).join('')}
+                <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #059669;">
+                  ${guestPayments.length} Paid
+                </span>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
+                ${guestPayments.map(p => `
+                  <div style="background: #090f1e; border: 1px solid var(--card-border); border-radius: 8px; padding: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+                      <span class="badge badge-open">${p.headCode}</span>
+                      <span class="badge badge-paid">✓ PAID</span>
+                    </div>
+                    <div style="font-weight: 700; font-size: 14px; color: #ffffff; margin-bottom: 6px; line-height: 1.4;">${p.headTitle}</div>
+                    <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+                      Invoice: <strong style="color: #38bdf8;">${p.invoiceNo}</strong> • Total Paid: <strong style="color: #34d399;">₹${p.totalAmount.toLocaleString('en-IN')}</strong>
+                    </div>
+                    <button onclick="app.viewInvoice('${p.invoiceNo}')" class="btn btn-success btn-sm" style="width: 100%; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+                      <span>✓</span> <span>View Tax Invoice & QR Passes</span>
+                    </button>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Open Events for Non-Members - STRICTLY ACTIVE ONLY -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <h3 style="font-size: 18px; font-weight: 700;">Programs Open to Non-Members</h3>
+              <p style="font-size: 13px; color: var(--text-muted);">Masterclasses and seminars open for non-member real estate professionals.</p>
+            </div>
+            <span style="font-size: 12px; color: var(--text-dim);">${activeNonMemberHeads.length} Program${activeNonMemberHeads.length !== 1 ? 's' : ''} Open</span>
           </div>
+
+          ${activeNonMemberHeads.length === 0 ? `
+            <div class="glass-card" style="text-align: center; padding: 36px 20px; background: rgba(15, 23, 42, 0.6); border: 1px dashed var(--card-border); margin-bottom: 24px;">
+              <div style="font-size: 38px; margin-bottom: 10px;">🏷️</div>
+              <h4 style="font-size: 16px; font-weight: 700; color: #ffffff; margin-bottom: 6px;">No Open Guest Programs</h4>
+              <p style="font-size: 13px; color: var(--text-muted); max-width: 520px; margin: 0 auto; line-height: 1.5;">
+                There are currently no training conclaves open for guest registrations. All active programs are restricted to CREA accredited members, or new guest sessions will be published soon.
+              </p>
+            </div>
+          ` : `
+            <div class="heads-grid">
+              ${activeNonMemberHeads.map(h => {
+                const basePrice = Number(h.prices.non_member);
+                const cgst = Math.round(basePrice * 0.09 * 100) / 100;
+                const sgst = Math.round(basePrice * 0.09 * 100) / 100;
+                const totalAmount = Math.round((basePrice + cgst + sgst) * 100) / 100;
+
+                return `
+                  <div class="head-card">
+                    <div>
+                      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                        <span class="badge badge-non_member">${h.code} • ${h.type.toUpperCase()}</span>
+                        <span class="badge badge-open">● GUEST SEATS OPEN</span>
+                      </div>
+
+                      <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 10px; color: #ffffff; line-height: 1.4;">
+                        ${h.title}
+                      </h4>
+
+                      <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
+                        <div>📅 <strong>Date:</strong> ${h.eventDate} (${h.eventTime})</div>
+                        <div>📍 <strong>Venue:</strong> ${h.venue}</div>
+                        <div>⏳ <strong>Closes:</strong> ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                      </div>
+                    </div>
+
+                    <div style="border-top: 1px solid var(--card-border); padding-top: 16px;">
+                      <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                          <span style="color: var(--text-muted);">Guest Fee (excl. GST):</span>
+                          <span style="color: #ffffff; font-weight: 600;">₹${basePrice.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                          <span style="color: var(--text-muted);">GST (18% - CGST 9% + SGST 9%):</span>
+                          <span style="color: #38bdf8; font-weight: 600;">+₹${(cgst + sgst).toLocaleString('en-IN')}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; border-top: 1px solid #1e293b; padding-top: 4px; color: #ffffff;">
+                          <span>Total Payable:</span>
+                          <span style="color: #34d399;">₹${totalAmount.toLocaleString('en-IN')}</span>
+                        </div>
+                      </div>
+
+                      <div style="display: flex; gap: 8px;">
+                        <button onclick="app.showHeadDetails('${h.id}')" class="btn btn-secondary btn-sm" style="flex: 1;">
+                          📄 Details
+                        </button>
+                        <button onclick="app.openPaymentModal('${h.id}', 'guest')" class="btn btn-primary btn-sm" style="flex: 1.5;">
+                          Pay ₹${totalAmount.toLocaleString('en-IN')} →
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `}
         `;
       },
 
@@ -1387,6 +1534,7 @@
                     const attendedCount = hPays.filter(p => p.attended).length;
                     const giftCount = hPays.filter(p => p.giftCollected).length;
                     const gross = hPays.reduce((acc, p) => acc + p.totalAmount, 0);
+                    const isDeleted = h.status === 'deleted' || h.isDeleted;
                     const isDeactivated = h.status === 'deactivated' || h.status === 'inactive';
                     const isExpired = h.activeUntil && new Date(h.activeUntil) < new Date();
 
@@ -1396,10 +1544,10 @@
                     const pGst = h.prices?.non_member != null ? `₹${Number(h.prices.non_member).toLocaleString('en-IN')}` : '<span style="color: var(--text-dim);">Restricted</span>';
 
                     return `
-                      <tr style="${isDeactivated ? 'background: rgba(239, 68, 68, 0.04);' : ''}">
+                      <tr style="${isDeleted ? 'background: rgba(148, 163, 184, 0.05); opacity: 0.8;' : isDeactivated ? 'background: rgba(239, 68, 68, 0.04);' : ''}">
                         <td>
                           <div>
-                            <strong style="color: ${isDeactivated ? '#cbd5e1' : '#ffffff'}; font-size: 13.5px;">${h.title}</strong>
+                            <strong style="color: ${isDeleted ? '#94a3b8' : isDeactivated ? '#cbd5e1' : '#ffffff'}; font-size: 13.5px;">${h.title}</strong>
                             <div style="font-size: 11px; color: #38bdf8; margin-top: 3px;">
                               Code: <strong>${h.code}</strong> • Event: ${h.eventDate || 'N/A'} • Closes: ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                             </div>
@@ -1407,7 +1555,11 @@
                         </td>
                         <td><span class="badge badge-open">${h.type.toUpperCase()}</span></td>
                         <td>
-                          ${isDeactivated ? `
+                          ${isDeleted ? `
+                            <span class="badge" style="background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.4);">
+                              🗑️ DELETED
+                            </span>
+                          ` : isDeactivated ? `
                             <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">
                               ⏸ DEACTIVATED
                             </span>
@@ -1442,13 +1594,23 @@
                             <button onclick="app.openEditHeadModal('${h.id}')" class="btn btn-outline btn-sm" style="padding: 4px 8px; font-size: 11.5px;" title="Modify title, extend dates, increase/decrease prices">
                               ✏️ Modify
                             </button>
-                            ${isDeactivated ? `
+                            ${isDeleted ? `
+                              <button onclick="app.toggleHeadStatus('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" title="Restore this program to active status">
+                                ▶ Restore
+                              </button>
+                            ` : isDeactivated ? `
                               <button onclick="app.toggleHeadStatus('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #34d399; border-color: rgba(16, 185, 129, 0.4);" title="Reactivate this training or membership">
                                 ▶ Activate
                               </button>
+                              <button onclick="app.confirmDeleteHead('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" title="Delete / archive this program">
+                                🗑️ Delete
+                              </button>
                             ` : `
-                              <button onclick="app.toggleHeadStatus('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #f87171; border-color: rgba(239, 68, 68, 0.4);" title="Deactivate this training or membership (pauses new registrations)">
+                              <button onclick="app.toggleHeadStatus('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #f87171; border-color: rgba(239, 68, 68, 0.4);" title="Deactivate this program (omits from payment pages)">
                                 ⏸ Deactivate
+                              </button>
+                              <button onclick="app.confirmDeleteHead('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" title="Delete / archive this program">
+                                🗑️ Delete
                               </button>
                             `}
                             ${h.type !== 'membership' ? `
@@ -1788,8 +1950,13 @@ ${head.writeup || 'No detailed write-up provided.'}
         const head = this.data.heads.find(h => h.id === headId);
         if (!head) return;
 
-        if (head.status === 'deactivated' || head.status === 'inactive') {
-          alert(`"${head.title}" has been deactivated by administration and cannot accept registrations.`);
+        if (head.status === 'deactivated' || head.status === 'inactive' || head.status === 'deleted' || head.isDeleted) {
+          alert(`"${head.title}" is currently deactivated or deleted and cannot accept registrations.`);
+          return;
+        }
+
+        if (head.activeUntil && new Date(head.activeUntil) < new Date()) {
+          alert(`Registration cutoff for "${head.title}" has passed.`);
           return;
         }
 
@@ -1915,8 +2082,13 @@ ${head.writeup || 'No detailed write-up provided.'}
         const head = this.data.heads.find(h => h.id === headId);
         if (!head) return;
 
-        if (head.status === 'deactivated' || head.status === 'inactive') {
-          alert(`"${head.title}" has been deactivated by administration and cannot accept registrations.`);
+        if (head.status === 'deactivated' || head.status === 'inactive' || head.status === 'deleted' || head.isDeleted) {
+          alert(`"${head.title}" is deactivated or deleted and cannot accept registrations.`);
+          return;
+        }
+
+        if (head.activeUntil && new Date(head.activeUntil) < new Date()) {
+          alert(`Registration cutoff for "${head.title}" has passed.`);
           return;
         }
 
@@ -2713,10 +2885,11 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
                       </select>
                     </div>
                     <div class="form-group" style="margin-bottom: 0;">
-                      <label class="form-label">Status (Active / Deactivated) *</label>
+                      <label class="form-label">Status (Active / Deactivated / Deleted) *</label>
                       <select id="edit-head-status" class="form-select" onchange="app.updateEditModalStatusBadge(this.value)">
-                        <option value="active" ${!isDeactivated ? 'selected' : ''}>● Active (Accepting Registrations)</option>
-                        <option value="deactivated" ${isDeactivated ? 'selected' : ''}>⏸ Deactivated (Registrations Paused)</option>
+                        <option value="active" ${(!isDeactivated && head.status !== 'deleted') ? 'selected' : ''}>● Active (Accepting Registrations)</option>
+                        <option value="deactivated" ${isDeactivated ? 'selected' : ''}>⏸ Deactivated (Hidden from Payment Pages)</option>
+                        <option value="deleted" ${head.status === 'deleted' ? 'selected' : ''}>🗑️ Deleted (Archived & Omitted from Payment Pages)</option>
                       </select>
                     </div>
                   </div>
@@ -2864,9 +3037,12 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
 
                 <!-- Modal Actions -->
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; flex-wrap: wrap; gap: 10px; border-top: 1px solid var(--card-border); padding-top: 16px;">
-                  <div>
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                     <button type="button" onclick="app.toggleHeadStatusFromModal('${head.id}')" class="btn btn-secondary btn-sm" style="${isDeactivated ? 'color: #34d399; border-color: rgba(16, 185, 129, 0.4);' : 'color: #f87171; border-color: rgba(239, 68, 68, 0.4);'}">
                       ${isDeactivated ? '▶ Toggle to Active' : '⏸ Toggle to Deactivated'}
+                    </button>
+                    <button type="button" onclick="app.confirmDeleteHead('${head.id}')" class="btn btn-secondary btn-sm" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" title="Delete this program">
+                      🗑️ Delete Event
                     </button>
                   </div>
                   <div style="display: flex; gap: 10px;">
@@ -2890,9 +3066,18 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
         if (!badge) return;
         if (val === "deactivated") {
           badge.className = "badge badge-deactivated";
+          badge.style.background = "";
+          badge.style.color = "";
           badge.textContent = "⏸ DEACTIVATED";
+        } else if (val === "deleted") {
+          badge.className = "badge";
+          badge.style.background = "rgba(148, 163, 184, 0.2)";
+          badge.style.color = "#94a3b8";
+          badge.textContent = "🗑️ DELETED";
         } else {
           badge.className = "badge badge-active";
+          badge.style.background = "";
+          badge.style.color = "";
           badge.textContent = "● ACTIVE";
         }
       },
@@ -3102,10 +3287,41 @@ Participants receive official CREA(I) accreditation credits, certified study mat
 
         this.render();
         if (newStatus === 'deactivated') {
-          alert(`⏸ '${head.title}' has been DEACTIVATED. Registrations for this entry are paused.`);
+          alert(`⏸ '${head.title}' has been DEACTIVATED.\n\nIt is now completely omitted and hidden from member and guest payment pages.`);
         } else {
-          alert(`▶ '${head.title}' is now ACTIVE. Registrations are open.`);
+          alert(`▶ '${head.title}' is now ACTIVE and open for registrations.`);
         }
+      },
+
+      async confirmDeleteHead(headId) {
+        const head = this.data.heads.find(h => h.id === headId);
+        if (!head) return;
+
+        const hPays = (this.data.payments || []).filter(p => p.headId === headId || p.headCode === head.code);
+
+        if (hPays.length > 0) {
+          const ok = confirm(`⚠️ "${head.title}" has ${hPays.length} paid registration(s).\n\nTo protect official GST tax invoices, audit trails, and delegate entrance QR passes, deleting this program will:\n• Permanently omit it from member & guest payment pages\n• Block any new registrations\n• Safely preserve all ${hPays.length} tax invoices and QR entrance passes\n\nProceed with deleting this event?`);
+          if (!ok) return;
+          head.status = 'deleted';
+        } else {
+          const ok = confirm(`Are you sure you want to delete "${head.title}"?\n\nIt will be permanently removed from all payment pages.`);
+          if (!ok) return;
+          head.status = 'deleted';
+        }
+
+        this.saveToStorage();
+
+        try {
+          await fetch("/api/head/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: head.id })
+          });
+        } catch(err){}
+
+        this.closeModal();
+        this.render();
+        alert(`🗑️ '${head.title}' has been deleted and completely removed from all payment pages.`);
       },
 
       // MEMBERS MANAGEMENT MODAL
@@ -4180,7 +4396,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
             payerId = null;
           }
 
-          const validHeads = this.data.heads.filter(h => (h.status !== 'deactivated' && h.status !== 'inactive') && h.prices[cat] !== null && h.prices[cat] !== undefined);
+          const validHeads = this.data.heads.filter(h => h.status !== 'deactivated' && h.status !== 'inactive' && h.status !== 'deleted' && !h.isDeleted && h.prices && h.prices[cat] !== null && h.prices[cat] !== undefined);
           if (validHeads.length === 0) continue;
           const head = validHeads[Math.floor(Math.random() * validHeads.length)];
 

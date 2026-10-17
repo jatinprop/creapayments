@@ -630,10 +630,10 @@ const server = http.createServer((req, res) => {
         return res.end(JSON.stringify({ success: false, error: "This payment head has closed/expired." }));
       }
 
-      // Check active / deactivated status
-      if (head.status === "deactivated" || head.status === "inactive") {
+      // Check active / deactivated / deleted status
+      if (head.status === "deactivated" || head.status === "inactive" || head.status === "deleted" || head.isDeleted) {
         res.writeHead(400, { "Content-Type": "application/json" });
-        return res.end(JSON.stringify({ success: false, error: "This payment head has been deactivated by administration and cannot accept registrations." }));
+        return res.end(JSON.stringify({ success: false, error: "This payment head is deactivated or deleted and cannot accept registrations." }));
       }
 
       // 18% GST Calculations
@@ -811,6 +811,39 @@ const server = http.createServer((req, res) => {
         success: true,
         head,
         message: `Program '${head.title}' is now ${body.status.toUpperCase()}.`
+      }));
+    });
+  }
+
+  // API ROUTE 3C: POST /api/head/delete (Delete / Archive Program)
+  if (req.method === "POST" && pathname === "/api/head/delete") {
+    return readBody((err, body) => {
+      if (err || !body.id) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: false, error: "Head ID is required." }));
+      }
+
+      const data = readData();
+      const head = data.heads.find((h) => h.id === body.id);
+      if (!head) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ success: false, error: "Payment head not found." }));
+      }
+
+      const hasPayments = (data.payments || []).some((p) => p.headId === body.id || p.headCode === head.code);
+      if (hasPayments) {
+        // Soft delete to protect audit records, tax invoices, and delegate passes
+        head.status = "deleted";
+      } else {
+        data.heads = data.heads.filter((h) => h.id !== body.id);
+      }
+      writeData(data);
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({
+        success: true,
+        head,
+        message: `Program '${head.title}' has been deleted and removed from payment pages.`
       }));
     });
   }
