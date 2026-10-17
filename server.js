@@ -778,7 +778,7 @@ const server = http.createServer((req, res) => {
         return res.end(JSON.stringify({ success: false, error: "Invalid JSON" }));
       }
 
-      const { id, code, title, type, status, eventDate, eventTime, venue, activeUntil, prices, writeup } = body;
+      const { id, code, title, type, status, eventDate, eventTime, venue, activeUntil, prices, writeup, priority } = body;
       const data = readData();
 
       // If updating an existing head
@@ -789,6 +789,7 @@ const server = http.createServer((req, res) => {
           if (code) existing.code = code.trim().toUpperCase();
           if (type) existing.type = type;
           if (status !== undefined) existing.status = status;
+          if (priority !== undefined) existing.priority = Number(priority) || 3;
           if (eventDate) existing.eventDate = eventDate;
           if (eventTime !== undefined) existing.eventTime = eventTime;
           if (venue !== undefined) existing.venue = venue.trim();
@@ -825,6 +826,7 @@ const server = http.createServer((req, res) => {
         venue: venue || "CREA(I) Centre, Bangalore",
         activeUntil,
         status: status || "active",
+        priority: priority != null ? Number(priority) : 3,
         prices: {
           new_member: (prices?.new_member !== null && prices?.new_member !== undefined && prices?.new_member !== "") ? Number(prices.new_member) : null,
           member: (prices?.member !== null && prices?.member !== undefined && prices?.member !== "") ? Number(prices.member) : null,

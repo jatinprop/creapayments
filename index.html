@@ -1039,13 +1039,19 @@
           return !isDeactivated && !isDeleted && !isExpired && hasPrice && !alreadyPaid;
         });
 
-        // Ensure Annual Membership appears first as the primary payable article if unpaid
+        // Ensure payables are sorted strictly by Priority ascending (Priority 1 = Top Priority)
+        // If priorities are identical, unpaid annual membership comes first, then earliest event date
         activeOpenHeads.sort((a, b) => {
+          const aPri = Number(a.priority != null ? a.priority : 3);
+          const bPri = Number(b.priority != null ? b.priority : 3);
+          if (aPri !== bPri) return aPri - bPri;
           const aIsMem = (a.code === 'MEM' || a.type === 'membership' || (a.title && a.title.toLowerCase().includes('membership')));
           const bIsMem = (b.code === 'MEM' || b.type === 'membership' || (b.title && b.title.toLowerCase().includes('membership')));
           if (aIsMem && !bIsMem) return -1;
           if (!aIsMem && bIsMem) return 1;
-          return 0;
+          const aDate = a.eventDate ? new Date(a.eventDate).getTime() : 0;
+          const bDate = b.eventDate ? new Date(b.eventDate).getTime() : 0;
+          return aDate - bDate;
         });
 
         return `
@@ -1311,64 +1317,145 @@
                 There are currently no additional open programs pending payment. All active programs have either been registered by you above, or new training sessions will be announced soon.
               </p>
             </div>
-          ` : `
-            <!-- Open Active Heads Grid -->
-            <div class="heads-grid">
-              ${activeOpenHeads.map(h => {
-                const basePrice = this.getHeadPrice(h, member.category);
-                const cgst = Math.round(basePrice * 0.09 * 100) / 100;
-                const sgst = Math.round(basePrice * 0.09 * 100) / 100;
-                const totalAmount = Math.round((basePrice + cgst + sgst) * 100) / 100;
+          ` : (() => {
+            const topHead = activeOpenHeads[0];
+            const otherHeads = activeOpenHeads.slice(1);
 
-                return `
-                  <div class="head-card">
-                    <div>
-                      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                        <span class="badge badge-open">${h.code} • ${h.type.toUpperCase()}</span>
-                        <span class="badge badge-open">● OPEN</span>
-                      </div>
+            const topBasePrice = this.getHeadPrice(topHead, member.category);
+            const topCgst = Math.round(topBasePrice * 0.09 * 100) / 100;
+            const topSgst = Math.round(topBasePrice * 0.09 * 100) / 100;
+            const topTotalAmount = Math.round((topBasePrice + topCgst + topSgst) * 100) / 100;
+            const topPri = Number(topHead.priority != null ? topHead.priority : 1);
 
-                      <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 10px; color: #ffffff; line-height: 1.4;">
-                        ${h.title}
-                      </h4>
+            return `
+              <!-- TOP PRIORITY HERO CARD (MAXIMUM VISIBILITY) -->
+              <div style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.16) 0%, rgba(30, 58, 138, 0.22) 50%, rgba(15, 23, 42, 0.96) 100%); border: 2.5px solid #f59e0b; box-shadow: 0 0 35px rgba(245, 158, 11, 0.3), inset 0 0 25px rgba(245, 158, 11, 0.08); border-radius: 16px; padding: 24px; margin-bottom: 24px; position: relative;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span class="badge" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; font-weight: 800; font-size: 11px; padding: 4px 10px; border: 1px solid #fde68a; box-shadow: 0 2px 10px rgba(245, 158, 11, 0.4); text-transform: uppercase; letter-spacing: 0.5px;">
+                      🔥 TOP PRIORITY • HIGHEST VISIBILITY
+                    </span>
+                    <span class="badge badge-open" style="font-weight: 700;">${topHead.code} • ${topHead.type.toUpperCase()}</span>
+                    <span class="badge" style="background: rgba(16, 185, 129, 0.25); color: #34d399; border: 1px solid #10b981; font-weight: 700;">● PRIMARY ARTICLE</span>
+                  </div>
+                  <div style="font-size: 12px; color: #fde68a; font-weight: 700; display: flex; align-items: center; gap: 5px;">
+                    <span>⚡ Priority #${topPri} Ranked Dues / Conclave</span>
+                  </div>
+                </div>
 
-                      <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
-                        <div>📅 <strong>Date:</strong> ${h.eventDate} (${h.eventTime})</div>
-                        <div>📍 <strong>Venue:</strong> ${h.venue}</div>
-                        <div>⏳ <strong>Closes:</strong> ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                      </div>
+                <div style="display: grid; grid-template-columns: 1.7fr 1.3fr; gap: 24px; align-items: center;">
+                  <div>
+                    <h3 style="font-size: 22px; font-weight: 800; color: #ffffff; line-height: 1.35; margin-bottom: 12px;">
+                      ${topHead.title}
+                    </h3>
+
+                    <div style="font-size: 13.5px; color: var(--text-muted); line-height: 1.7; margin-bottom: 14px;">
+                      <div>📅 <strong style="color: #fff;">Event Date:</strong> ${topHead.eventDate} (${topHead.eventTime || 'Full Day'})</div>
+                      <div>📍 <strong style="color: #fff;">Venue:</strong> ${topHead.venue}</div>
+                      <div>⏳ <strong style="color: #fbbf24;">Registration Cutoff:</strong> ${new Date(topHead.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                     </div>
 
-                    <div style="border-top: 1px solid var(--card-border); padding-top: 16px;">
-                      <!-- Price Breakdown Box -->
-                      <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                          <span style="color: var(--text-muted);">Base Fee (excl. GST):</span>
-                          <span style="color: #ffffff; font-weight: 600;">₹${basePrice.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                          <span style="color: var(--text-muted);">GST (18% - CGST 9% + SGST 9%):</span>
-                          <span style="color: #38bdf8; font-weight: 600;">+₹${(cgst + sgst).toLocaleString('en-IN')}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; border-top: 1px solid #1e293b; padding-top: 4px; color: #ffffff;">
-                          <span>Total Payable:</span>
-                          <span style="color: #34d399;">₹${totalAmount.toLocaleString('en-IN')}</span>
-                        </div>
-                      </div>
+                    ${topHead.writeup ? `
+                      <p style="font-size: 12.5px; color: #cbd5e1; line-height: 1.5; margin: 0; max-height: 52px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
+                        ${topHead.writeup}
+                      </p>
+                    ` : ''}
+                  </div>
 
-                      <div style="display: flex; gap: 8px;">
-                        <button onclick="app.showHeadDetails('${h.id}')" class="btn btn-secondary btn-sm" style="flex: 1;">
-                          📄 Event Details
-                        </button>
-                        <button onclick="app.openPaymentModal('${h.id}', 'member')" class="btn btn-primary btn-sm" style="flex: 1.5;">
-                          Pay ₹${totalAmount.toLocaleString('en-IN')} →
-                        </button>
-                      </div>
+                  <div style="background: rgba(9, 15, 29, 0.9); border: 1.5px solid rgba(245, 158, 11, 0.5); border-radius: 12px; padding: 18px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                    <div style="font-size: 11px; font-weight: 700; color: #fbbf24; text-transform: uppercase; margin-bottom: 10px; letter-spacing: 0.5px;">
+                      Tier Pricing (${member.category.replace('_', ' ').toUpperCase()})
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 12.5px;">
+                      <span style="color: var(--text-muted);">Base Amount (excl. GST):</span>
+                      <span style="color: #ffffff; font-weight: 600;">₹${topBasePrice.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12.5px;">
+                      <span style="color: var(--text-muted);">GST (18% - CGST 9% + SGST 9%):</span>
+                      <span style="color: #38bdf8; font-weight: 600;">+₹${(topCgst + topSgst).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 16px; font-weight: 800; border-top: 1px solid rgba(245, 158, 11, 0.3); padding-top: 8px; margin-bottom: 14px; color: #ffffff;">
+                      <span>Total Payable:</span>
+                      <span style="color: #34d399;">₹${topTotalAmount.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                      <button onclick="app.showHeadDetails('${topHead.id}')" class="btn btn-secondary btn-sm" style="flex: 1; padding: 9px 10px; font-size: 12px;">
+                        📄 Details
+                      </button>
+                      <button onclick="app.openPaymentModal('${topHead.id}', 'member')" class="btn btn-primary" style="flex: 1.6; background: linear-gradient(135deg, #f59e0b, #d97706); border-color: #f59e0b; color: #000; font-weight: 800; font-size: 13.5px; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);">
+                        Pay ₹${topTotalAmount.toLocaleString('en-IN')} Now →
+                      </button>
                     </div>
                   </div>
-                `;
-              }).join('')}
-            </div>
+                </div>
+              </div>
+
+              ${otherHeads.length > 0 ? `
+                <div style="font-size: 14px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin: 24px 0 14px 0; letter-spacing: 0.5px;">
+                  Additional Open Programs & Dues (${otherHeads.length})
+                </div>
+                <!-- Other Open Heads Grid -->
+                <div class="heads-grid">
+                  ${otherHeads.map(h => {
+                    const basePrice = this.getHeadPrice(h, member.category);
+                    const cgst = Math.round(basePrice * 0.09 * 100) / 100;
+                    const sgst = Math.round(basePrice * 0.09 * 100) / 100;
+                    const totalAmount = Math.round((basePrice + cgst + sgst) * 100) / 100;
+                    const hPri = Number(h.priority != null ? h.priority : 3);
+                    const priBadge = hPri === 1 ? '🔥 Priority 1 (Top)' : hPri === 2 ? '⭐ Priority 2' : hPri === 4 ? '⚪ Priority 4' : hPri === 5 ? '⏳ Priority 5' : '🔷 Priority 3';
+
+                    return `
+                      <div class="head-card">
+                        <div>
+                          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                            <span class="badge badge-open">${h.code} • ${h.type.toUpperCase()}</span>
+                            <span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); font-size: 10px;">${priBadge}</span>
+                          </div>
+
+                          <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 10px; color: #ffffff; line-height: 1.4;">
+                            ${h.title}
+                          </h4>
+
+                          <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
+                            <div>📅 <strong>Date:</strong> ${h.eventDate} (${h.eventTime})</div>
+                            <div>📍 <strong>Venue:</strong> ${h.venue}</div>
+                            <div>⏳ <strong>Closes:</strong> ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                          </div>
+                        </div>
+
+                        <div style="border-top: 1px solid var(--card-border); padding-top: 16px;">
+                          <!-- Price Breakdown Box -->
+                          <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                              <span style="color: var(--text-muted);">Base Fee (excl. GST):</span>
+                              <span style="color: #ffffff; font-weight: 600;">₹${basePrice.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                              <span style="color: var(--text-muted);">GST (18% - CGST 9% + SGST 9%):</span>
+                              <span style="color: #38bdf8; font-weight: 600;">+₹${(cgst + sgst).toLocaleString('en-IN')}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; border-top: 1px solid #1e293b; padding-top: 4px; color: #ffffff;">
+                              <span>Total Payable:</span>
+                              <span style="color: #34d399;">₹${totalAmount.toLocaleString('en-IN')}</span>
+                            </div>
+                          </div>
+
+                          <div style="display: flex; gap: 8px;">
+                            <button onclick="app.showHeadDetails('${h.id}')" class="btn btn-secondary btn-sm" style="flex: 1;">
+                              📄 Details
+                            </button>
+                            <button onclick="app.openPaymentModal('${h.id}', 'member')" class="btn btn-primary btn-sm" style="flex: 1.5;">
+                              Pay ₹${totalAmount.toLocaleString('en-IN')} →
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              ` : ''}
+            `;
+          })()}
           `}
         `;
       },
@@ -1388,6 +1475,16 @@
           const hasPrice = price !== null && price !== undefined && price !== "";
 
           return !isDeactivated && !isDeleted && !isExpired && hasPrice;
+        });
+
+        // Sort guest open heads strictly by priority ascending (Priority 1 = Top Priority)
+        activeNonMemberHeads.sort((a, b) => {
+          const aPri = Number(a.priority != null ? a.priority : 3);
+          const bPri = Number(b.priority != null ? b.priority : 3);
+          if (aPri !== bPri) return aPri - bPri;
+          const aDate = a.eventDate ? new Date(a.eventDate).getTime() : 0;
+          const bDate = b.eventDate ? new Date(b.eventDate).getTime() : 0;
+          return aDate - bDate;
         });
 
         const guestMobile = (this.guestInfo.mobile || "").trim();
@@ -1488,62 +1585,143 @@
                 There are currently no training conclaves open for guest registrations. All active programs are restricted to CREA accredited members, or new guest sessions will be published soon.
               </p>
             </div>
-          ` : `
-            <div class="heads-grid">
-              ${activeNonMemberHeads.map(h => {
-                const basePrice = Number(h.prices.non_member);
-                const cgst = Math.round(basePrice * 0.09 * 100) / 100;
-                const sgst = Math.round(basePrice * 0.09 * 100) / 100;
-                const totalAmount = Math.round((basePrice + cgst + sgst) * 100) / 100;
+          ` : (() => {
+            const topGuest = activeNonMemberHeads[0];
+            const otherGuests = activeNonMemberHeads.slice(1);
 
-                return `
-                  <div class="head-card">
-                    <div>
-                      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                        <span class="badge badge-non_member">${h.code} • ${h.type.toUpperCase()}</span>
-                        <span class="badge badge-open">● GUEST SEATS OPEN</span>
-                      </div>
+            const topBase = Number(topGuest.prices.non_member);
+            const topCgst = Math.round(topBase * 0.09 * 100) / 100;
+            const topSgst = Math.round(topBase * 0.09 * 100) / 100;
+            const topTotal = Math.round((topBase + topCgst + topSgst) * 100) / 100;
+            const topPri = Number(topGuest.priority != null ? topGuest.priority : 1);
 
-                      <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 10px; color: #ffffff; line-height: 1.4;">
-                        ${h.title}
-                      </h4>
+            return `
+              <!-- TOP PRIORITY HERO CARD (MAXIMUM VISIBILITY FOR GUESTS) -->
+              <div style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.16) 0%, rgba(30, 58, 138, 0.22) 50%, rgba(15, 23, 42, 0.96) 100%); border: 2.5px solid #f59e0b; box-shadow: 0 0 35px rgba(245, 158, 11, 0.3), inset 0 0 25px rgba(245, 158, 11, 0.08); border-radius: 16px; padding: 24px; margin-bottom: 24px; position: relative;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span class="badge" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; font-weight: 800; font-size: 11px; padding: 4px 10px; border: 1px solid #fde68a; box-shadow: 0 2px 10px rgba(245, 158, 11, 0.4); text-transform: uppercase; letter-spacing: 0.5px;">
+                      🔥 TOP PRIORITY • HIGHEST VISIBILITY
+                    </span>
+                    <span class="badge badge-non_member" style="font-weight: 700;">${topGuest.code} • ${topGuest.type.toUpperCase()}</span>
+                    <span class="badge" style="background: rgba(16, 185, 129, 0.25); color: #34d399; border: 1px solid #10b981; font-weight: 700;">● GUEST SEATS OPEN</span>
+                  </div>
+                  <div style="font-size: 12px; color: #fde68a; font-weight: 700; display: flex; align-items: center; gap: 5px;">
+                    <span>⚡ Priority #${topPri} Featured Program</span>
+                  </div>
+                </div>
 
-                      <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
-                        <div>📅 <strong>Date:</strong> ${h.eventDate} (${h.eventTime})</div>
-                        <div>📍 <strong>Venue:</strong> ${h.venue}</div>
-                        <div>⏳ <strong>Closes:</strong> ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                      </div>
+                <div style="display: grid; grid-template-columns: 1.7fr 1.3fr; gap: 24px; align-items: center;">
+                  <div>
+                    <h3 style="font-size: 22px; font-weight: 800; color: #ffffff; line-height: 1.35; margin-bottom: 12px;">
+                      ${topGuest.title}
+                    </h3>
+
+                    <div style="font-size: 13.5px; color: var(--text-muted); line-height: 1.7; margin-bottom: 14px;">
+                      <div>📅 <strong style="color: #fff;">Date:</strong> ${topGuest.eventDate} (${topGuest.eventTime || 'Full Day'})</div>
+                      <div>📍 <strong style="color: #fff;">Venue:</strong> ${topGuest.venue}</div>
+                      <div>⏳ <strong style="color: #fbbf24;">Closes:</strong> ${new Date(topGuest.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                     </div>
 
-                    <div style="border-top: 1px solid var(--card-border); padding-top: 16px;">
-                      <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                          <span style="color: var(--text-muted);">Guest Fee (excl. GST):</span>
-                          <span style="color: #ffffff; font-weight: 600;">₹${basePrice.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                          <span style="color: var(--text-muted);">GST (18% - CGST 9% + SGST 9%):</span>
-                          <span style="color: #38bdf8; font-weight: 600;">+₹${(cgst + sgst).toLocaleString('en-IN')}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; border-top: 1px solid #1e293b; padding-top: 4px; color: #ffffff;">
-                          <span>Total Payable:</span>
-                          <span style="color: #34d399;">₹${totalAmount.toLocaleString('en-IN')}</span>
-                        </div>
-                      </div>
+                    ${topGuest.writeup ? `
+                      <p style="font-size: 12.5px; color: #cbd5e1; line-height: 1.5; margin: 0; max-height: 52px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
+                        ${topGuest.writeup}
+                      </p>
+                    ` : ''}
+                  </div>
 
-                      <div style="display: flex; gap: 8px;">
-                        <button onclick="app.showHeadDetails('${h.id}')" class="btn btn-secondary btn-sm" style="flex: 1;">
-                          📄 Details
-                        </button>
-                        <button onclick="app.openPaymentModal('${h.id}', 'guest')" class="btn btn-primary btn-sm" style="flex: 1.5;">
-                          Pay ₹${totalAmount.toLocaleString('en-IN')} →
-                        </button>
-                      </div>
+                  <div style="background: rgba(9, 15, 29, 0.9); border: 1.5px solid rgba(245, 158, 11, 0.5); border-radius: 12px; padding: 18px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                    <div style="font-size: 11px; font-weight: 700; color: #fbbf24; text-transform: uppercase; margin-bottom: 10px; letter-spacing: 0.5px;">
+                      Guest Fee Breakdown
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 12.5px;">
+                      <span style="color: var(--text-muted);">Guest Fee (excl. GST):</span>
+                      <span style="color: #ffffff; font-weight: 600;">₹${topBase.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12.5px;">
+                      <span style="color: var(--text-muted);">GST (18% - CGST 9% + SGST 9%):</span>
+                      <span style="color: #38bdf8; font-weight: 600;">+₹${(topCgst + topSgst).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 16px; font-weight: 800; border-top: 1px solid rgba(245, 158, 11, 0.3); padding-top: 8px; margin-bottom: 14px; color: #ffffff;">
+                      <span>Total Payable:</span>
+                      <span style="color: #34d399;">₹${topTotal.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                      <button onclick="app.showHeadDetails('${topGuest.id}')" class="btn btn-secondary btn-sm" style="flex: 1; padding: 9px 10px; font-size: 12px;">
+                        📄 Details
+                      </button>
+                      <button onclick="app.openPaymentModal('${topGuest.id}', 'guest')" class="btn btn-primary" style="flex: 1.6; background: linear-gradient(135deg, #f59e0b, #d97706); border-color: #f59e0b; color: #000; font-weight: 800; font-size: 13.5px; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);">
+                        Pay ₹${topTotal.toLocaleString('en-IN')} Now →
+                      </button>
                     </div>
                   </div>
-                `;
-              }).join('')}
-            </div>
+                </div>
+              </div>
+
+              ${otherGuests.length > 0 ? `
+                <div style="font-size: 14px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin: 24px 0 14px 0; letter-spacing: 0.5px;">
+                  Additional Open Conclaves (${otherGuests.length})
+                </div>
+                <div class="heads-grid">
+                  ${otherGuests.map(h => {
+                    const basePrice = Number(h.prices.non_member);
+                    const cgst = Math.round(basePrice * 0.09 * 100) / 100;
+                    const sgst = Math.round(basePrice * 0.09 * 100) / 100;
+                    const totalAmount = Math.round((basePrice + cgst + sgst) * 100) / 100;
+                    const hPri = Number(h.priority != null ? h.priority : 3);
+                    const priBadge = hPri === 1 ? '🔥 Priority 1 (Top)' : hPri === 2 ? '⭐ Priority 2' : hPri === 4 ? '⚪ Priority 4' : hPri === 5 ? '⏳ Priority 5' : '🔷 Priority 3';
+
+                    return `
+                      <div class="head-card">
+                        <div>
+                          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                            <span class="badge badge-non_member">${h.code} • ${h.type.toUpperCase()}</span>
+                            <span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); font-size: 10px;">${priBadge}</span>
+                          </div>
+
+                          <h4 style="font-size: 16px; font-weight: 700; margin-bottom: 10px; color: #ffffff; line-height: 1.4;">
+                            ${h.title}
+                          </h4>
+
+                          <div style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
+                            <div>📅 <strong>Date:</strong> ${h.eventDate} (${h.eventTime})</div>
+                            <div>📍 <strong>Venue:</strong> ${h.venue}</div>
+                            <div>⏳ <strong>Closes:</strong> ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                          </div>
+                        </div>
+
+                        <div style="border-top: 1px solid var(--card-border); padding-top: 16px;">
+                          <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 12px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                              <span style="color: var(--text-muted);">Guest Fee (excl. GST):</span>
+                              <span style="color: #ffffff; font-weight: 600;">₹${basePrice.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                              <span style="color: var(--text-muted);">GST (18% - CGST 9% + SGST 9%):</span>
+                              <span style="color: #38bdf8; font-weight: 600;">+₹${(cgst + sgst).toLocaleString('en-IN')}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; border-top: 1px solid #1e293b; padding-top: 4px; color: #ffffff;">
+                              <span>Total Payable:</span>
+                              <span style="color: #34d399;">₹${totalAmount.toLocaleString('en-IN')}</span>
+                            </div>
+                          </div>
+
+                          <div style="display: flex; gap: 8px;">
+                            <button onclick="app.showHeadDetails('${h.id}')" class="btn btn-secondary btn-sm" style="flex: 1;">
+                              📄 Details
+                            </button>
+                            <button onclick="app.openPaymentModal('${h.id}', 'guest')" class="btn btn-primary btn-sm" style="flex: 1.5;">
+                              Pay ₹${totalAmount.toLocaleString('en-IN')} →
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              ` : ''}
+            `;
+          })()}
           `}
         `;
       },
@@ -1780,8 +1958,11 @@
                       if (aActive && !bActive) return -1;
                       if (!aActive && bActive) return 1;
 
-                      // 2. Both active: Annual Membership first, then by event date ascending
+                      // 2. Both active: Priority ascending (Priority 1 first), then Annual Membership, then by event date ascending
                       if (aActive && bActive) {
+                        const aPri = Number(a.priority != null ? a.priority : 3);
+                        const bPri = Number(b.priority != null ? b.priority : 3);
+                        if (aPri !== bPri) return aPri - bPri;
                         if (a.code === 'MEM' && b.code !== 'MEM') return -1;
                         if (b.code === 'MEM' && a.code !== 'MEM') return 1;
                         const aDate = a.eventDate ? new Date(a.eventDate).getTime() : 0;
@@ -1826,7 +2007,14 @@
                               </div>
                             </div>
                           </td>
-                          <td><span class="badge badge-open">${h.type.toUpperCase()}</span></td>
+                          <td>
+                            <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+                              <span class="badge badge-open">${h.type.toUpperCase()}</span>
+                              <span class="badge" style="${(h.priority == 1) ? 'background: rgba(245, 158, 11, 0.25); color: #fbbf24; border: 1px solid #f59e0b; font-weight: 700;' : (h.priority == 2) ? 'background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4);' : 'background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3);'}; font-size: 10px; padding: 2px 6px;">
+                                ${(h.priority == 1) ? '🔥 Priority 1 (Top)' : (h.priority == 2) ? '⭐ Priority 2' : (h.priority == 4) ? '⚪ Priority 4' : (h.priority == 5) ? '⏳ Priority 5' : '🔷 Priority 3'}
+                              </span>
+                            </div>
+                          </td>
                           <td>
                             ${isDeleted ? `
                               <span class="badge" style="background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.4);">
@@ -3149,13 +3337,23 @@ ${head.writeup || 'No detailed write-up provided.'}
                   </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px;">
                   <div class="form-group">
                     <label class="form-label">Type *</label>
                     <select id="new-head-type" class="form-select">
                       <option value="training">Training</option>
                       <option value="event">Event / Conclave</option>
                       <option value="membership">Membership</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" title="Determines display order in Member & Guest Portals. Priority 1 appears first with Maximum Hero Visibility.">Display Priority *</label>
+                    <select id="new-head-priority" class="form-select">
+                      <option value="1">🔥 Priority 1 (Top / Hero)</option>
+                      <option value="2">⭐ Priority 2 (High)</option>
+                      <option value="3" selected>🔷 Priority 3 (Standard)</option>
+                      <option value="4">⚪ Priority 4 (Normal)</option>
+                      <option value="5">⏳ Priority 5 (Lowest)</option>
                     </select>
                   </div>
                   <div class="form-group">
@@ -3267,6 +3465,7 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
         const title = document.getElementById("new-head-title").value.trim();
         const code = document.getElementById("new-head-code").value.trim().toUpperCase();
         const type = document.getElementById("new-head-type").value;
+        const priority = Number(document.getElementById("new-head-priority")?.value || 3);
         const eventDate = document.getElementById("new-head-date").value;
         const activeUntil = document.getElementById("new-head-active-until").value;
         const venue = document.getElementById("new-head-venue").value.trim();
@@ -3287,6 +3486,7 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
           code,
           title,
           type,
+          priority,
           eventDate,
           eventTime: "10:00 AM - 05:00 PM IST",
           venue,
@@ -3376,7 +3576,7 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
                     <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">Modifying this updates the display title across all member portals, invoices, and payment receipts.</div>
                   </div>
 
-                  <div style="display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 12px;">
+                  <div style="display: grid; grid-template-columns: 0.8fr 1fr 1.1fr 1.2fr; gap: 12px;">
                     <div class="form-group" style="margin-bottom: 0;">
                       <label class="form-label">Head Code *</label>
                       <input type="text" id="edit-head-code" required value="${app.escapeHtml(head.code)}" class="form-input" style="text-transform: uppercase;">
@@ -3387,6 +3587,16 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
                         <option value="training" ${head.type === 'training' ? 'selected' : ''}>Training</option>
                         <option value="membership" ${head.type === 'membership' ? 'selected' : ''}>Membership</option>
                         <option value="event" ${head.type === 'event' ? 'selected' : ''}>Event / Conclave</option>
+                      </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                      <label class="form-label" title="Determines display order in Member & Guest Portals. Priority 1 appears first with Maximum Hero Visibility.">Display Priority *</label>
+                      <select id="edit-head-priority" class="form-select">
+                        <option value="1" ${(head.priority == 1) ? 'selected' : ''}>🔥 Priority 1 (Top / Hero)</option>
+                        <option value="2" ${(head.priority == 2) ? 'selected' : ''}>⭐ Priority 2 (High)</option>
+                        <option value="3" ${(head.priority == 3 || !head.priority) ? 'selected' : ''}>🔷 Priority 3 (Standard)</option>
+                        <option value="4" ${(head.priority == 4) ? 'selected' : ''}>⚪ Priority 4 (Normal)</option>
+                        <option value="5" ${(head.priority == 5) ? 'selected' : ''}>⏳ Priority 5 (Lowest)</option>
                       </select>
                     </div>
                     <div class="form-group" style="margin-bottom: 0;">
@@ -3709,6 +3919,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         const title = document.getElementById("edit-head-title").value.trim();
         const code = document.getElementById("edit-head-code").value.trim().toUpperCase();
         const type = document.getElementById("edit-head-type").value;
+        const priority = Number(document.getElementById("edit-head-priority")?.value || 3);
         const status = document.getElementById("edit-head-status").value;
         const eventDate = document.getElementById("edit-head-date").value;
         const activeUntil = document.getElementById("edit-head-active-until").value;
@@ -3738,6 +3949,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         head.code = code;
         head.type = type;
         head.status = status;
+        head.priority = priority;
         head.eventDate = eventDate;
         head.eventTime = eventTime || head.eventTime || "Full Day";
         head.activeUntil = activeUntil;
@@ -3758,6 +3970,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
               code,
               type,
               status,
+              priority,
               eventDate,
               eventTime: head.eventTime,
               activeUntil,
@@ -4221,7 +4434,11 @@ Participants receive official CREA(I) accreditation credits, certified study mat
       // GSTIN Auto-fetch & autofill handler
       _gstTimer: null,
       onGstInput(val, mode = 'add') {
-        const clean = (val || '').trim().toUpperCase();
+        const clean = (val || '').replace(/[^a-zA-Z0-9]/g, '').trim().toUpperCase();
+        const gstinInput = document.getElementById(`${mode}-mem-gstin`);
+        if (gstinInput && gstinInput.value !== clean) {
+          gstinInput.value = clean;
+        }
         const statusEl = document.getElementById(`${mode}-mem-gstin-status`);
         if (this._gstTimer) clearTimeout(this._gstTimer);
 
@@ -4239,11 +4456,11 @@ Participants receive official CREA(I) accreditation credits, certified study mat
 
         if (clean.length === 15) {
           if (statusEl) {
-            statusEl.innerHTML = `<span style="color: #38bdf8;">Checking GSTIN...</span>`;
+            statusEl.innerHTML = `<span style="color: #38bdf8;">🔄 Verifying GSTIN...</span>`;
           }
           this._gstTimer = setTimeout(() => {
             this.fetchAndFillGst(mode);
-          }, 350);
+          }, 200);
         }
       },
 
@@ -4254,9 +4471,10 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         const addressInput = document.getElementById(`${mode}-mem-address`);
 
         if (!gstinInput) return;
-        const gstin = (gstinInput.value || '').trim().toUpperCase();
+        const gstin = (gstinInput.value || '').replace(/[^a-zA-Z0-9]/g, '').trim().toUpperCase();
+        gstinInput.value = gstin;
 
-        if (!gstin) {
+        if (!gstin || gstin.length !== 15) {
           if (statusEl) statusEl.innerHTML = '<span style="color: #f87171;">Enter 15-digit GSTIN</span>';
           return;
         }
@@ -4282,10 +4500,10 @@ Participants receive official CREA(I) accreditation credits, certified study mat
             companyInput.value = fetchedCompany;
             companyInput.style.transition = 'all 0.3s ease';
             companyInput.style.borderColor = '#10b981';
-            companyInput.style.boxShadow = '0 0 10px rgba(16, 185, 129, 0.4)';
+            companyInput.style.boxShadow = '0 0 12px rgba(16, 185, 129, 0.45)';
             setTimeout(() => {
               companyInput.style.boxShadow = 'none';
-            }, 1800);
+            }, 2000);
           }
 
           // Auto-fill address
@@ -4293,17 +4511,19 @@ Participants receive official CREA(I) accreditation credits, certified study mat
             addressInput.value = data.address;
             addressInput.style.transition = 'all 0.3s ease';
             addressInput.style.borderColor = '#10b981';
-            addressInput.style.boxShadow = '0 0 10px rgba(16, 185, 129, 0.4)';
+            addressInput.style.boxShadow = '0 0 12px rgba(16, 185, 129, 0.45)';
             setTimeout(() => {
               addressInput.style.boxShadow = 'none';
-            }, 1800);
+            }, 2000);
           }
 
           if (statusEl) {
-            if (data.partial) {
+            if (fetchedCompany) {
+              statusEl.innerHTML = `<span style="color: #34d399; font-weight: 600;" title="${data.tradeName || data.legalName}">✓ Verified: ${data.state} (${data.source === 'razorpay_api' || data.source === 'razorpay_web' ? 'Live GST' : 'Directory'})</span>`;
+            } else if (data.partial) {
               statusEl.innerHTML = `<span style="color: #fbbf24;">✓ ${data.state} (${data.entityType || 'Verified'})</span>`;
             } else {
-              statusEl.innerHTML = `<span style="color: #34d399;" title="${data.tradeName || data.legalName}">✓ Auto-filled (${data.source === 'live_gsp' ? 'Live GST' : 'Directory'})</span>`;
+              statusEl.innerHTML = `<span style="color: #34d399;">✓ Verified</span>`;
             }
           }
         } catch (err) {

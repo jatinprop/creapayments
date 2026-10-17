@@ -127,6 +127,7 @@
     {
       "id": "head-mem",
       "code": "MEM",
+      "priority": 1,
       "title": "Annual CREA(I) Membership 2026-2027",
       "type": "membership",
       "eventDate": "2026-04-01",
@@ -145,6 +146,7 @@
     {
       "id": "head-trn1",
       "code": "TRN1",
+      "priority": 2,
       "title": "Masterclass: RERA Compliance, Title Verification & Escrows",
       "type": "training",
       "eventDate": "2026-10-28",
@@ -163,6 +165,7 @@
     {
       "id": "head-trn2",
       "code": "TRN2",
+      "priority": 3,
       "title": "Executive Training: Digital Lead Generation & NRI Client Acquisition",
       "type": "training",
       "eventDate": "2026-11-18",
@@ -181,6 +184,7 @@
     {
       "id": "head-evt1",
       "code": "EVT1",
+      "priority": 4,
       "title": "CREA(I) Annual Realty Conclave & Networking Gala 2026",
       "type": "event",
       "eventDate": "2026-12-15",
