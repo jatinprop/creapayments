@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CREA(I) — Real Estate Payment & Membership Management Suite</title>
+  <link rel="icon" type="image/jpeg" href="assets/crea_logo.jpg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -467,7 +468,9 @@
   <!-- 2. Header Bar -->
   <header>
     <div class="brand-container" onclick="app.switchTab('admin')">
-      <div class="brand-logo">🏛️</div>
+      <div class="brand-logo" style="background: #ffffff; padding: 2px;">
+        <img src="assets/crea_logo.jpg" alt="CREA(I) Logo" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
+      </div>
       <div class="brand-text">
         <h1>CREA(I) <span>PAY</span></h1>
         <p>Real Estate Associate Payment Portal</p>
@@ -980,8 +983,8 @@
           return `
             <div style="max-width: 520px; margin: 40px auto;" class="glass-card">
               <div style="text-align: center; margin-bottom: 24px;">
-                <div style="width: 52px; height: 52px; border-radius: 14px; background: rgba(37, 99, 235, 0.2); border: 1px solid rgba(56, 189, 248, 0.35); display: inline-flex; align-items: center; justify-content: center; font-size: 26px; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);">
-                  🔒
+                <div style="width: 60px; height: 60px; border-radius: 14px; background: #ffffff; border: 1px solid rgba(56, 189, 248, 0.35); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3); overflow: hidden; padding: 4px;">
+                  <img src="assets/crea_logo.jpg" alt="CREA(I) Logo" style="width: 100%; height: 100%; object-fit: contain;">
                 </div>
                 <h2 style="font-size: 22px; font-weight: 800; color: #ffffff;">CREA Member Secure Login</h2>
                 <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
@@ -1581,10 +1584,18 @@
         return `
           <div style="margin-bottom: 28px;">
             <div class="glass-card" style="border-left: 4px solid var(--gold);">
-              <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">
-                Non-Member & Guest Registration Portal
-              </h2>
-              <p style="font-size: 13.5px; color: var(--text-muted); line-height: 1.5;">
+              <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 10px;">
+                <div style="width: 48px; height: 48px; border-radius: 10px; background: #ffffff; padding: 3px; flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.25); overflow: hidden;">
+                  <img src="assets/crea_logo.jpg" alt="CREA(I) Logo" style="width: 100%; height: 100%; object-fit: contain;">
+                </div>
+                <div>
+                  <h2 style="font-size: 20px; font-weight: 700; margin: 0 0 2px 0;">
+                    Non-Member & Guest Registration Portal
+                  </h2>
+                  <div style="font-size: 11.5px; color: #fbbf24; font-weight: 600;">CONFEDERATION OF REAL ESTATE ASSOCIATES-INDIA</div>
+                </div>
+              </div>
+              <p style="font-size: 13.5px; color: var(--text-muted); line-height: 1.5; margin: 0;">
                 Welcome to CREA(I). Non-member real estate professionals, independent brokers, and guests can register for open trainings and conclaves below. Enter your contact details to generate your GST tax invoice and entry passes.
               </p>
 
@@ -1821,8 +1832,8 @@
           return `
             <div style="max-width: 440px; margin: 60px auto;" class="glass-card">
               <div style="text-align: center; margin-bottom: 24px;">
-                <div style="width: 52px; height: 52px; border-radius: 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); display: inline-flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 12px;">
-                  🛡️
+                <div style="width: 60px; height: 60px; border-radius: 14px; background: #ffffff; border: 1px solid rgba(239, 68, 68, 0.35); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px; box-shadow: 0 4px 14px rgba(239, 68, 68, 0.2); overflow: hidden; padding: 4px;">
+                  <img src="assets/crea_logo.jpg" alt="CREA(I) Logo" style="width: 100%; height: 100%; object-fit: contain;">
                 </div>
                 <h2 style="font-size: 20px; font-weight: 700;">Admin Authentication</h2>
                 <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Enter the CREA(I) administrator secret PIN</p>
@@ -2817,9 +2828,14 @@ ${head.writeup || 'No detailed write-up provided.'}
           <div class="modal-overlay" onclick="app.closeModal(event)">
             <div class="modal-box" onclick="event.stopPropagation()">
               <div class="modal-header">
-                <div>
-                  <h3 style="font-size: 18px; font-weight: 700;">Confirm Registration & Payment</h3>
-                  <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">CREA(I) Direct Digital Checkout</p>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 42px; height: 42px; border-radius: 8px; background: #ffffff; padding: 2px; flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.3); overflow: hidden;">
+                    <img src="assets/crea_logo.jpg" alt="CREA(I) Logo" style="width: 100%; height: 100%; object-fit: contain;">
+                  </div>
+                  <div>
+                    <h3 style="font-size: 18px; font-weight: 700; margin: 0;">Confirm Registration & Payment</h3>
+                    <p style="font-size: 12px; color: var(--text-muted); margin: 2px 0 0 0;">CREA(I) Direct Digital Checkout</p>
+                  </div>
                 </div>
                 <button class="modal-close" onclick="app.closeModal()">&times;</button>
               </div>
@@ -3172,13 +3188,16 @@ ${head.writeup || 'No detailed write-up provided.'}
               <!-- Printable Tax Invoice Canvas -->
               <div id="printable-invoice-container" style="background: #ffffff; color: #0f172a; padding: 32px; border-radius: 12px; font-family: Arial, sans-serif;">
                 <!-- Header -->
-                <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 20px;">
-                  <div>
-                    <h2 style="font-size: 20px; font-weight: 900; color: #1e3a8a; margin-bottom: 4px;">CREA(I)</h2>
-                    <div style="font-size: 11px; font-weight: 700; color: #334155; text-transform: uppercase;">CONFEDERATION OF REAL ESTATE ASSOCIATES-INDIA</div>
-                    <div style="font-size: 11px; color: #475569; margin-top: 4px;">
-                      Registered Office: No. 702, Barton Center, #84 M.G.Road,Bangalore-560001,Karnataka,India<br>
-                      <strong>GSTIN: 29AABAC7593A1ZR</strong> | PAN: AABAC7593A | State Code: 29
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 20px;">
+                  <div style="display: flex; align-items: center; gap: 14px;">
+                    <img src="assets/crea_logo.jpg" alt="CREA(I) Logo" style="width: 70px; height: 70px; object-fit: contain; border-radius: 6px; border: 1px solid #e2e8f0; background: #ffffff; padding: 3px; flex-shrink: 0;">
+                    <div>
+                      <h2 style="font-size: 20px; font-weight: 900; color: #1e3a8a; margin: 0 0 4px 0; line-height: 1.1;">CREA(I)</h2>
+                      <div style="font-size: 11px; font-weight: 700; color: #334155; text-transform: uppercase;">CONFEDERATION OF REAL ESTATE ASSOCIATES-INDIA</div>
+                      <div style="font-size: 11px; color: #475569; margin-top: 4px; line-height: 1.4;">
+                        Registered Office: No. 702, Barton Center, #84 M.G.Road,Bangalore-560001,Karnataka,India<br>
+                        <strong>GSTIN: 29AABAC7593A1ZR</strong> | PAN: AABAC7593A | State Code: 29
+                      </div>
                     </div>
                   </div>
 
