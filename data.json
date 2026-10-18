@@ -228,7 +228,8 @@
       "attended": false,
       "attendedAt": null,
       "giftCollected": false,
-      "giftCollectedAt": null
+      "giftCollectedAt": null,
+      "payerCompany": "Apex Prime Realty"
     },
     {
       "id": "pay-102",
@@ -256,7 +257,8 @@
       "attended": false,
       "attendedAt": null,
       "giftCollected": false,
-      "giftCollectedAt": null
+      "giftCollectedAt": null,
+      "payerCompany": "Deccan Realtors & Estates"
     },
     {
       "id": "pay-103",
@@ -284,7 +286,8 @@
       "attended": false,
       "attendedAt": null,
       "giftCollected": false,
-      "giftCollectedAt": null
+      "giftCollectedAt": null,
+      "payerCompany": "Lotus Property Consultants"
     },
     {
       "id": "pay-104",
@@ -312,7 +315,8 @@
       "attended": true,
       "attendedAt": "2026-10-28T09:45:00.000Z",
       "giftCollected": true,
-      "giftCollectedAt": "2026-10-28T09:50:00.000Z"
+      "giftCollectedAt": "2026-10-28T09:50:00.000Z",
+      "payerCompany": "Apex Prime Realty"
     },
     {
       "id": "pay-105",
@@ -340,7 +344,8 @@
       "attended": true,
       "attendedAt": "2026-10-28T10:02:00.000Z",
       "giftCollected": false,
-      "giftCollectedAt": null
+      "giftCollectedAt": null,
+      "payerCompany": "Urban Estates"
     },
     {
       "id": "pay-106",
@@ -368,7 +373,8 @@
       "attended": false,
       "attendedAt": null,
       "giftCollected": false,
-      "giftCollectedAt": null
+      "giftCollectedAt": null,
+      "payerCompany": "Staypolis Brokerage"
     },
     {
       "id": "pay-107",
@@ -396,7 +402,8 @@
       "attended": false,
       "attendedAt": null,
       "giftCollected": false,
-      "giftCollectedAt": null
+      "giftCollectedAt": null,
+      "payerCompany": "Lotus Property Consultants"
     },
     {
       "id": "pay-108",
@@ -424,7 +431,8 @@
       "attended": false,
       "attendedAt": null,
       "giftCollected": false,
-      "giftCollectedAt": null
+      "giftCollectedAt": null,
+      "payerCompany": "Mehra Properties"
     },
     {
       "id": "pay-109",
@@ -452,7 +460,8 @@
       "attended": false,
       "attendedAt": null,
       "giftCollected": false,
-      "giftCollectedAt": null
+      "giftCollectedAt": null,
+      "payerCompany": "Apex Prime Realty"
     },
     {
       "id": "pay-110",
@@ -480,7 +489,8 @@
       "attended": false,
       "attendedAt": null,
       "giftCollected": false,
-      "giftCollectedAt": null
+      "giftCollectedAt": null,
+      "payerCompany": "Bhatia Realtors"
     },
     {
       "id": "pay-111",
@@ -508,7 +518,8 @@
       "attended": false,
       "attendedAt": null,
       "giftCollected": false,
-      "giftCollectedAt": null
+      "giftCollectedAt": null,
+      "payerCompany": "Deccan Realtors & Estates"
     },
     {
       "id": "pay-112",
@@ -536,7 +547,8 @@
       "attended": false,
       "attendedAt": null,
       "giftCollected": false,
-      "giftCollectedAt": null
+      "giftCollectedAt": null,
+      "payerCompany": "Apex Prime Realty"
     },
     {
       "id": "pay-113",
@@ -564,7 +576,8 @@
       "attended": false,
       "attendedAt": null,
       "giftCollected": false,
-      "giftCollectedAt": null
+      "giftCollectedAt": null,
+      "payerCompany": "Greenview Builders"
     },
     {
       "id": "pay-114",
@@ -592,7 +605,8 @@
       "attended": false,
       "attendedAt": null,
       "giftCollected": false,
-      "giftCollectedAt": null
+      "giftCollectedAt": null,
+      "payerCompany": "Reddy Associates"
     }
   ],
   "emailLogs": [
