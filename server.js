@@ -224,3 +224,5 @@ if (!process.env.VERCEL) {
     console.log(`======================================================\n`);
   });
 }
+
+export default server;

@@ -11,5 +11,10 @@
     { "source": "/api/gst/(.*)", "destination": "/api/gst?gstin=$1" },
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/((?!api/|assets/|favicon\\.ico|.*\\..*).*)", "destination": "/index.html" }
-  ]
+  ],
+  "functions": {
+    "server.js": {
+      "includeFiles": "{index.html,data.json,logo crea.jpg}"
+    }
+  }
 }
