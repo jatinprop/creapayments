@@ -1,5 +1,5 @@
 {
-  "invoiceCounter": 14,
+  "invoiceCounter": 16,
   "members": [
     {
       "id": "mem-001",
@@ -132,6 +132,28 @@
   ],
   "heads": [
     {
+      "id": "head-1792349944218",
+      "code": "HIST1",
+      "title": "Masterclass on Real Estate Due Diligence (Historic 2025)",
+      "type": "training",
+      "eventDate": "2025-10-15",
+      "eventTime": "10:00 AM - 05:00 PM IST",
+      "venue": "The Oberoi, MG Road, Bangalore",
+      "activeUntil": "2025-10-15T23:59",
+      "status": "active",
+      "isLive": false,
+      "giftEnabled": false,
+      "priority": 3,
+      "prices": {
+        "associate_member": 1000,
+        "member": 1500,
+        "non_member": 2500,
+        "is_live": false,
+        "gift_enabled": false
+      },
+      "writeup": "Comprehensive historic session conducted in October 2025."
+    },
+    {
       "id": "head-mem",
       "code": "MEM",
       "priority": 1,
@@ -213,6 +235,34 @@
     }
   ],
   "payments": [
+    {
+      "id": "pay-1792350065737",
+      "invoiceNo": "CREA/2627/HIST1/0016",
+      "serial": 16,
+      "date": "2026-10-18T19:01:05.510Z",
+      "headId": "head-1792349943283",
+      "headCode": "HIST1",
+      "headTitle": "Masterclass on Real Estate Due Diligence (Historic 2025)",
+      "payerType": "non_member",
+      "payerCategory": "non_member",
+      "payerId": null,
+      "payerName": "Rajesh Kumar (Past Delegate)",
+      "payerMobile": "9876543210",
+      "payerEmail": "rajesh.past@example.com",
+      "payerCompany": "Kumar Realty Associates",
+      "payerGstin": "29AABCK1234D1Z2",
+      "payerAddress": "Indiranagar, Bangalore",
+      "attended": true,
+      "giftCollected": false,
+      "baseAmount": 2500,
+      "cgst": 225,
+      "sgst": 225,
+      "totalGst": 450,
+      "totalAmount": 2950,
+      "status": "success",
+      "method": "Simulated Gateway (Instant Checkout)",
+      "attendedAt": "2026-10-18T19:02:38.251Z"
+    },
     {
       "id": "pay-101",
       "invoiceNo": "CREA/2627/MEM/0001",
@@ -621,6 +671,16 @@
     }
   ],
   "emailLogs": [
+    {
+      "id": "log-1792350065737",
+      "timestamp": "2026-10-18T19:01:05.510Z",
+      "recipient": "rajesh.past@example.com",
+      "recipientName": "Rajesh Kumar (Past Delegate)",
+      "subject": "CREA(I) Official Tax Invoice CREA/2627/HIST1/0016 - Masterclass on Real Estate Due Diligence (Historic 2025)",
+      "invoiceNo": "CREA/2627/HIST1/0016",
+      "amount": 2950,
+      "status": "Dispatched (Simulated SMTP)"
+    },
     {
       "id": "log-1",
       "timestamp": "2026-08-05T10:15:02.000Z",

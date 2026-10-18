@@ -12,6 +12,7 @@
   <script src="lib/jsqr.min.js"></script>
   <script src="lib/pdf-lib.min.js"></script>
   <script src="lib/fontkit.umd.min.js"></script>
+  <script src="lib/html2pdf.bundle.min.js"></script>
   <script>
     if (typeof qrcode === 'undefined') {
       const s = document.createElement('script');
@@ -27,6 +28,11 @@
       const s3 = document.createElement('script');
       s3.src = "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js";
       document.head.appendChild(s3);
+    }
+    if (typeof html2pdf === 'undefined') {
+      const s4 = document.createElement('script');
+      s4.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+      document.head.appendChild(s4);
     }
   </script>
   <style>
@@ -428,22 +434,92 @@
       border-bottom: 2px solid rgba(56, 189, 248, 0.45);
     }
 
-    /* Print Invoice Styling */
+    /* Print Invoice & Certificate Styling — High-Fidelity Unclipped Output */
     @media print {
-      body * {
-        visibility: hidden;
+      @page {
+        size: A4 portrait;
+        margin: 8mm 10mm 8mm 10mm;
+      }
+      *, *::before, *::after {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      html, body {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        height: auto !important;
+        min-height: 100% !important;
+        overflow: visible !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      #app-root, .no-print, .modal-header, .modal-close {
+        display: none !important;
+      }
+      body > *:not(#modal-root) {
+        display: none !important;
+      }
+      #modal-root {
+        display: block !important;
+        position: static !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        width: 100% !important;
+      }
+      .modal-overlay {
+        position: static !important;
+        background: transparent !important;
+        backdrop-filter: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        display: block !important;
+        overflow: visible !important;
+        width: 100% !important;
+        height: auto !important;
+        max-height: none !important;
+        z-index: auto !important;
+      }
+      .modal-box {
+        position: static !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        max-height: none !important;
+        height: auto !important;
+        overflow: visible !important;
+        padding: 0 !important;
+        margin: 0 !important;
       }
       #printable-invoice-container, #printable-invoice-container * {
-        visibility: visible;
+        visibility: visible !important;
+      }
+      #printable-certificate-container, #printable-certificate-container * {
+        visibility: visible !important;
       }
       #printable-invoice-container {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
+        position: relative !important;
+        left: auto !important;
+        top: auto !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
         background: #ffffff !important;
-        color: #000000 !important;
-        padding: 20px !important;
+        color: #0f172a !important;
+        padding: 0 !important;
+        margin: 0 auto !important;
+        border-radius: 0 !important;
+        page-break-inside: avoid;
+      }
+      #printable-certificate-container {
+        position: relative !important;
+        left: auto !important;
+        top: auto !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        margin: 0 auto !important;
+        page-break-inside: avoid;
       }
       .no-print {
         display: none !important;
@@ -1865,17 +1941,19 @@
                 <div>
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                     <label class="form-label" style="margin: 0;">Mobile Number *</label>
-                    ${this.guestOtpState.verified && this.guestOtpState.mobile === (this.guestInfo.mobile || '').replace(/\D/g, '').slice(-10) ? `
-                      <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; font-size: 10px; padding: 1px 6px;">✓ Verified</span>
-                    ` : `
-                      <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid #d97706; font-size: 9.5px; padding: 1px 6px;">OTP at Checkout</span>
-                    `}
+                    <span id="guest-otp-badge">
+                      ${this.guestOtpState.verified && this.guestOtpState.mobile === (this.guestInfo.mobile || '').replace(/\D/g, '').slice(-10) ? `
+                        <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; font-size: 10px; padding: 1px 6px;">✓ Verified</span>
+                      ` : `
+                        <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid #d97706; font-size: 9.5px; padding: 1px 6px;">OTP at Checkout</span>
+                      `}
+                    </span>
                   </div>
-                  <input type="text" id="guest-mobile" value="${this.guestInfo.mobile}" oninput="app.guestInfo.mobile = this.value; app.render();" placeholder="e.g. 9845112233" class="form-input">
+                  <input type="tel" id="guest-mobile" value="${this.guestInfo.mobile || ''}" oninput="app.onGuestContactInput('mobile', this.value)" placeholder="e.g. 9845112233" class="form-input">
                 </div>
                 <div>
                   <label class="form-label">Email Address (for Invoice) *</label>
-                  <input type="email" id="guest-email" value="${this.guestInfo.email}" oninput="app.guestInfo.email = this.value; app.render();" placeholder="e.g. sid@urbanestates.in" class="form-input">
+                  <input type="email" id="guest-email" value="${this.guestInfo.email || ''}" oninput="app.onGuestContactInput('email', this.value)" placeholder="e.g. sid@urbanestates.in" class="form-input">
                 </div>
                 <div>
                   <label class="form-label">GSTIN (Optional / For Tax Credit)</label>
@@ -1890,41 +1968,9 @@
           </div>
 
           <!-- Existing Guest Registrations / Invoices (If payment was made for an event) -->
-          ${guestPayments.length > 0 ? `
-            <div class="glass-card" style="margin-bottom: 26px; border-left: 4px solid #10b981; background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.9) 100%);">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
-                <div>
-                  <h4 style="font-size: 16px; font-weight: 700; color: #34d399; margin: 0; display: flex; align-items: center; gap: 8px;">
-                    <span>✓</span> <span>Found ${guestPayments.length} Existing Registration${guestPayments.length > 1 ? 's' : ''} for ${this.guestInfo.name ? this.guestInfo.name : 'Your Contact'}</span>
-                  </h4>
-                  <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
-                    Your official GST tax invoices, entry QR passes, and welcome kit claim vouchers are ready for download.
-                  </p>
-                </div>
-                <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #059669;">
-                  ${guestPayments.length} Paid
-                </span>
-              </div>
-
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
-                ${guestPayments.map(p => `
-                  <div style="background: #090f1e; border: 1px solid var(--card-border); border-radius: 8px; padding: 14px;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
-                      <span class="badge badge-open">${p.headCode}</span>
-                      <span class="badge badge-paid">✓ PAID</span>
-                    </div>
-                    <div style="font-weight: 700; font-size: 14px; color: #ffffff; margin-bottom: 6px; line-height: 1.4;">${p.headTitle}</div>
-                    <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
-                      Invoice: <strong style="color: #38bdf8;">${p.invoiceNo}</strong> • Total Paid: <strong style="color: #34d399;">₹${p.totalAmount.toLocaleString('en-IN')}</strong>
-                    </div>
-                    <button onclick="app.viewInvoice('${p.invoiceNo}')" class="btn btn-success btn-sm" style="width: 100%; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
-                      <span>✓</span> <span>View Tax Invoice & QR Passes</span>
-                    </button>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          ` : ''}
+          <div id="guest-existing-registrations-container">
+            ${this.renderGuestExistingRegistrations(guestPayments)}
+          </div>
 
           <!-- Open Events for Non-Members - STRICTLY ACTIVE ONLY -->
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
@@ -2080,6 +2126,78 @@
               ` : ''}
             `;
           })()}
+        `;
+      },
+
+      onGuestContactInput(field, val) {
+        if (!this.guestInfo) this.guestInfo = {};
+        this.guestInfo[field] = val;
+
+        // 1. Live OTP badge update without touching input focus
+        if (field === 'mobile') {
+          const badgeEl = document.getElementById("guest-otp-badge");
+          if (badgeEl) {
+            const clean = (val || '').replace(/\D/g, '').slice(-10);
+            const isVer = this.guestOtpState.verified && this.guestOtpState.mobile === clean;
+            badgeEl.innerHTML = isVer ? `
+              <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; font-size: 10px; padding: 1px 6px;">✓ Verified</span>
+            ` : `
+              <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid #d97706; font-size: 9.5px; padding: 1px 6px;">OTP at Checkout</span>
+            `;
+          }
+        }
+
+        // 2. Dynamically update existing registrations list without re-rendering inputs or stealing cursor
+        const guestMobile = (this.guestInfo.mobile || "").trim();
+        const guestEmail = (this.guestInfo.email || "").trim().toLowerCase();
+        const guestPayments = (guestMobile || guestEmail) ? (this.data.payments || []).filter(p => {
+          const matchMob = guestMobile && this.cleanMobile(p.payerMobile) === this.cleanMobile(guestMobile);
+          const matchEmail = guestEmail && (p.payerEmail || "").toLowerCase() === guestEmail;
+          return (matchMob || matchEmail) && p.status === 'success';
+        }) : [];
+
+        const container = document.getElementById("guest-existing-registrations-container");
+        if (container) {
+          container.innerHTML = this.renderGuestExistingRegistrations(guestPayments);
+        }
+      },
+
+      renderGuestExistingRegistrations(guestPayments = []) {
+        if (!guestPayments || guestPayments.length === 0) return '';
+        return `
+          <div class="glass-card" style="margin-bottom: 26px; border-left: 4px solid #10b981; background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.9) 100%);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <h4 style="font-size: 16px; font-weight: 700; color: #34d399; margin: 0; display: flex; align-items: center; gap: 8px;">
+                  <span>✓</span> <span>Found ${guestPayments.length} Existing Registration${guestPayments.length > 1 ? 's' : ''} for ${this.guestInfo.name ? this.guestInfo.name : 'Your Contact'}</span>
+                </h4>
+                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                  Your official GST tax invoices, entry QR passes, and welcome kit claim vouchers are ready for download.
+                </p>
+              </div>
+              <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #059669;">
+                ${guestPayments.length} Paid
+              </span>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
+              ${guestPayments.map(p => `
+                <div style="background: #090f1e; border: 1px solid var(--card-border); border-radius: 8px; padding: 14px;">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+                    <span class="badge badge-open">${p.headCode}</span>
+                    <span class="badge badge-paid">✓ PAID</span>
+                  </div>
+                  <div style="font-weight: 700; font-size: 14px; color: #ffffff; margin-bottom: 6px; line-height: 1.4;">${p.headTitle}</div>
+                  <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+                    Invoice: <strong style="color: #38bdf8;">${p.invoiceNo}</strong> • Total Paid: <strong style="color: #34d399;">₹${p.totalAmount.toLocaleString('en-IN')}</strong>
+                  </div>
+                  <button onclick="app.viewInvoice('${p.invoiceNo}')" class="btn btn-success btn-sm" style="width: 100%; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+                    <span>✓</span> <span>View Tax Invoice & QR Passes</span>
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          </div>
         `;
       },
 
@@ -2349,6 +2467,7 @@
                       const isExpired = h.activeUntil && new Date(h.activeUntil) < now;
                       const isToday = this.isEventToday(h.eventDate);
                       const isLive = this.isHeadLive(h);
+                      const isPastEvent = h.eventDate && this.getEventDateOnly(h.eventDate) < this.getTodayDateOnly();
 
                       const pAssoc = (h.prices?.associate_member ?? h.prices?.new_member) != null ? `₹${Number(h.prices.associate_member ?? h.prices.new_member).toLocaleString('en-IN')}` : '-';
                       const pMem = h.prices?.member != null ? `₹${Number(h.prices.member).toLocaleString('en-IN')}` : '-';
@@ -2360,7 +2479,7 @@
                             <div>
                               <strong style="color: ${isDeleted ? '#94a3b8' : isDeactivated ? '#cbd5e1' : '#ffffff'}; font-size: 13.5px;">${h.title}</strong>
                               <div style="font-size: 11px; color: #38bdf8; margin-top: 3px;">
-                                Code: <strong>${h.code}</strong> • Event: ${h.eventDate || 'N/A'}${isLive ? ' <span class="badge" style="background: rgba(239, 68, 68, 0.25); color: #f87171; border: 1.5px solid #ef4444; font-size: 10px; padding: 1px 6px; font-weight: 700;">🔴 LIVE NOW</span>' : isToday ? ' <span class="badge" style="background: rgba(16, 185, 129, 0.25); color: #34d399; border: 1px solid #10b981; font-size: 10px; padding: 1px 6px;">● TODAY</span>' : ''} ${h.type !== 'membership' ? (h.giftEnabled ? '<span class="badge" style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid #9333ea; font-size: 10px; padding: 1px 6px; font-weight: 600;">🎁 Gifts Approved</span>' : '<span class="badge" style="background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); font-size: 10px; padding: 1px 6px;">🚫 Gifts Disabled</span>') : ''} • Closes: ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                Code: <strong>${h.code}</strong> • Event: ${h.eventDate || 'N/A'}${isLive ? ' <span class="badge" style="background: rgba(239, 68, 68, 0.25); color: #f87171; border: 1.5px solid #ef4444; font-size: 10px; padding: 1px 6px; font-weight: 700;">🔴 LIVE NOW</span>' : isToday ? ' <span class="badge" style="background: rgba(16, 185, 129, 0.25); color: #34d399; border: 1px solid #10b981; font-size: 10px; padding: 1px 6px;">● TODAY</span>' : isPastEvent ? ' <span class="badge" style="background: rgba(148, 163, 184, 0.2); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.35); font-size: 10px; padding: 1px 6px;">🕒 HISTORIC</span>' : ''} ${h.type !== 'membership' ? (h.giftEnabled ? '<span class="badge" style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid #9333ea; font-size: 10px; padding: 1px 6px; font-weight: 600;">🎁 Gifts Approved</span>' : '<span class="badge" style="background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); font-size: 10px; padding: 1px 6px;">🚫 Gifts Disabled</span>') : ''} • Closes: ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                               </div>
                             </div>
                           </td>
@@ -2383,7 +2502,7 @@
                               </span>
                             ` : isExpired ? `
                               <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">
-                                ⌛ EXPIRED
+                                ${isPastEvent ? '🕒 COMPLETED' : '⌛ EXPIRED'}
                               </span>
                             ` : `
                               <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);">
@@ -2410,6 +2529,9 @@
                             <div style="display: flex; gap: 5px; align-items: center; justify-content: center; flex-wrap: wrap;">
                               <button onclick="app.openEditHeadModal('${h.id}')" class="btn btn-outline btn-sm" style="padding: 4px 8px; font-size: 11.5px;" title="Modify title, extend dates, increase/decrease prices">
                                 ✏️ Modify
+                              </button>
+                              <button onclick="app.openAdminDelegateRegistration('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #34d399; border-color: rgba(16, 185, 129, 0.4);" title="Register a delegate and issue official Tax Invoice for this program">
+                                + Register Delegate
                               </button>
                               ${isDeleted ? `
                                 <button onclick="app.toggleHeadStatus('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" title="Restore this program to active status">
@@ -2999,7 +3121,9 @@ ${head.writeup || 'No detailed write-up provided.'}
           return;
         }
 
-        if (head.activeUntil && new Date(head.activeUntil) < new Date()) {
+        const isAdminMode = Boolean(this.isAdminAuthenticated || this.currentTab === 'admin' || mode === 'admin' || mode === 'admin_entry');
+        const isCutoffPassed = head.activeUntil && new Date(head.activeUntil) < new Date();
+        if (isCutoffPassed && !isAdminMode) {
           alert(`Registration cutoff for "${head.title}" has passed.`);
           return;
         }
@@ -3113,6 +3237,12 @@ ${head.writeup || 'No detailed write-up provided.'}
                 <button class="modal-close" onclick="app.closeModal()">&times;</button>
               </div>
 
+              ${isCutoffPassed && isAdminMode ? `
+                <div style="background: rgba(245, 158, 11, 0.15); border: 1.5px solid #f59e0b; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; color: #fbbf24; font-size: 12px; line-height: 1.45;">
+                  🕒 <strong>Back-Dated Registration (Admin Override Active):</strong> This event's regular registration cutoff has passed. As an administrator, you are recording an official delegate registration and issuing a verified Tax Invoice.
+                </div>
+              ` : ''}
+
               <!-- Payer info -->
               <div style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 13px;">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
@@ -3190,7 +3320,8 @@ ${head.writeup || 'No detailed write-up provided.'}
           return;
         }
 
-        if (head.activeUntil && new Date(head.activeUntil) < new Date()) {
+        const isAdminMode = Boolean(this.isAdminAuthenticated || this.currentTab === 'admin');
+        if (head.activeUntil && new Date(head.activeUntil) < new Date() && !isAdminMode) {
           alert(`Registration cutoff for "${head.title}" has passed.`);
           return;
         }
@@ -3254,7 +3385,7 @@ ${head.writeup || 'No detailed write-up provided.'}
           const res = await fetch("/api/payment", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ headId, payerType, payerCategory, payerId, payerName, payerMobile, payerEmail, payerGstin, payerAddress, payerCompany })
+            body: JSON.stringify({ headId, payerType, payerCategory, payerId, payerName, payerMobile, payerEmail, payerGstin, payerAddress, payerCompany, isAdmin: isAdminMode, allowExpired: isAdminMode })
           });
           if (res.ok) {
             const result = await res.json();
@@ -3558,6 +3689,9 @@ ${head.writeup || 'No detailed write-up provided.'}
                       🎓 Certificate (PDF)
                     </button>
                   ` : ''}
+                  <button onclick="app.downloadInvoicePDF('${payment.invoiceNo}')" class="btn btn-sm" style="background: linear-gradient(135deg, #10b981, #059669); border-color: #059669; color: #fff; font-weight: 700; padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px;">
+                    📥 Download Invoice (PDF)
+                  </button>
                   <button onclick="window.print()" class="btn btn-primary btn-sm">🖨️ Print / Save PDF</button>
                   <button class="modal-close" onclick="app.closeModal()">&times;</button>
                 </div>
@@ -3714,14 +3848,14 @@ ${head.writeup || 'No detailed write-up provided.'}
                 <!-- Itemized GST Table -->
                 <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 24px;">
                   <thead>
-                    <tr style="background: #0f172a; color: #ffffff;">
-                      <th style="padding: 8px 10px; text-align: left;">S.No</th>
-                      <th style="padding: 8px 10px; text-align: left;">Description of Head / Service</th>
-                      <th style="padding: 8px 10px; text-align: center;">SAC</th>
-                      <th style="padding: 8px 10px; text-align: right;">Taxable (₹)</th>
-                      <th style="padding: 8px 10px; text-align: right;">CGST 9%</th>
-                      <th style="padding: 8px 10px; text-align: right;">SGST 9%</th>
-                      <th style="padding: 8px 10px; text-align: right;">Total Amount</th>
+                    <tr style="background: #0f172a !important; color: #ffffff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
+                      <th style="padding: 8px 10px; text-align: left; background: #0f172a !important; color: #ffffff !important; border: 1px solid #0f172a;">S.No</th>
+                      <th style="padding: 8px 10px; text-align: left; background: #0f172a !important; color: #ffffff !important; border: 1px solid #0f172a;">Description of Head / Service</th>
+                      <th style="padding: 8px 10px; text-align: center; background: #0f172a !important; color: #ffffff !important; border: 1px solid #0f172a;">SAC</th>
+                      <th style="padding: 8px 10px; text-align: right; background: #0f172a !important; color: #ffffff !important; border: 1px solid #0f172a;">Taxable (₹)</th>
+                      <th style="padding: 8px 10px; text-align: right; background: #0f172a !important; color: #ffffff !important; border: 1px solid #0f172a;">CGST 9%</th>
+                      <th style="padding: 8px 10px; text-align: right; background: #0f172a !important; color: #ffffff !important; border: 1px solid #0f172a;">SGST 9%</th>
+                      <th style="padding: 8px 10px; text-align: right; background: #0f172a !important; color: #ffffff !important; border: 1px solid #0f172a;">Total Amount</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3762,13 +3896,17 @@ ${head.writeup || 'No detailed write-up provided.'}
                 </div>
               </div>
 
-              <div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;" class="no-print">
-                <div>
+              <div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;" class="no-print">
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                   ${(payment.headCode === 'MEM' || (payment.headTitle && payment.headTitle.toLowerCase().includes('membership'))) ? `
                     <button onclick="app.openCertificateModal('${payment.invoiceNo}')" class="btn btn-sm" style="background: linear-gradient(135deg, #d97706, #b45309); border-color: #f59e0b; color: #fff; font-weight: 700; padding: 7px 14px; display: inline-flex; align-items: center; gap: 6px;">
                       🎓 Download Official Membership Certificate (PDF)
                     </button>
                   ` : ''}
+                  <button onclick="app.downloadInvoicePDF('${payment.invoiceNo}')" class="btn btn-sm" style="background: linear-gradient(135deg, #10b981, #059669); border-color: #059669; color: #fff; font-weight: 700; padding: 7px 14px; display: inline-flex; align-items: center; gap: 6px;">
+                    📥 Download Invoice (PDF)
+                  </button>
+                  <button onclick="window.print()" class="btn btn-primary btn-sm" style="padding: 7px 14px;">🖨️ Print / Save PDF</button>
                 </div>
                 <button onclick="app.closeModal()" class="btn btn-secondary btn-sm">Close Window</button>
               </div>
@@ -3780,6 +3918,37 @@ ${head.writeup || 'No detailed write-up provided.'}
       closeModal(e) {
         if (!e || e.target.classList.contains("modal-overlay") || e.target.classList.contains("modal-close")) {
           document.getElementById("modal-root").innerHTML = "";
+        }
+      },
+
+      downloadInvoicePDF(invoiceNo) {
+        const container = document.getElementById("printable-invoice-container");
+        if (!container) {
+          window.print();
+          return;
+        }
+        const cleanNo = String(invoiceNo || "Invoice").replace(/[^a-zA-Z0-9_-]/g, "_");
+
+        if (window.html2pdf) {
+          const opt = {
+            margin: [8, 8, 8, 8],
+            filename: `Tax_Invoice_${cleanNo}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: {
+              scale: 2,
+              useCORS: true,
+              logging: false,
+              backgroundColor: '#ffffff'
+            },
+            jsPDF: {
+              unit: 'mm',
+              format: 'a4',
+              orientation: 'portrait'
+            }
+          };
+          window.html2pdf().set(opt).from(container).save();
+        } else {
+          window.print();
         }
       },
 
@@ -4061,8 +4230,208 @@ ${head.writeup || 'No detailed write-up provided.'}
         }
       },
 
+      // ADMIN DELEGATE REGISTRATION MODAL (FOR REGULAR & BACK-DATED EVENTS)
+      openAdminDelegateRegistration(headId) {
+        const head = this.data.heads.find(h => h.id === headId);
+        if (!head) return;
+
+        const isPast = head.eventDate && this.getEventDateOnly(head.eventDate) < this.getTodayDateOnly();
+
+        document.getElementById("modal-root").innerHTML = `
+          <div class="modal-overlay" onclick="app.closeModal(event)">
+            <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 620px;">
+              <div class="modal-header">
+                <div>
+                  <span class="badge badge-open">${head.code} • ${head.type.toUpperCase()}</span>
+                  <h3 style="font-size: 18px; font-weight: 700; margin-top: 6px;">Register Delegate / Issue Tax Invoice</h3>
+                  <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                    Program: <strong>${head.title}</strong> (${head.eventDate || 'N/A'})
+                  </div>
+                </div>
+                <button class="modal-close" onclick="app.closeModal()">&times;</button>
+              </div>
+
+              ${isPast ? `
+                <div style="background: rgba(245, 158, 11, 0.12); border: 1.5px solid rgba(245, 158, 11, 0.35); border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; color: #fbbf24; font-size: 12px; line-height: 1.45;">
+                  🕒 <strong>Back-Dated / Historic Program Registration:</strong> This event took place on <strong>${head.eventDate}</strong>. Admin registration override is active, allowing you to record attendee participation, issue official GST Tax Invoices, and record kiosk check-ins.
+                </div>
+              ` : ''}
+
+              <!-- Mode Selection: Existing Member vs Guest/Non-Member -->
+              <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+                <button type="button" id="reg-tab-member" onclick="app.switchAdminRegMode('member', '${head.id}')" class="btn btn-primary btn-sm" style="flex: 1; padding: 8px 12px;">
+                  🏢 Existing CREA Member
+                </button>
+                <button type="button" id="reg-tab-guest" onclick="app.switchAdminRegMode('guest', '${head.id}')" class="btn btn-secondary btn-sm" style="flex: 1; padding: 8px 12px;">
+                  👤 Guest / Non-Member
+                </button>
+              </div>
+
+              <!-- Form Container -->
+              <div id="admin-reg-form-container"></div>
+            </div>
+          </div>
+        `;
+
+        this.switchAdminRegMode('member', head.id);
+      },
+
+      switchAdminRegMode(mode, headId) {
+        const head = this.data.heads.find(h => h.id === headId);
+        if (!head) return;
+
+        const tabMem = document.getElementById("reg-tab-member");
+        const tabGuest = document.getElementById("reg-tab-guest");
+        const container = document.getElementById("admin-reg-form-container");
+        if (!container) return;
+
+        if (mode === 'member') {
+          if (tabMem) {
+            tabMem.className = "btn btn-primary btn-sm";
+            tabMem.style.background = "";
+            tabMem.style.borderColor = "";
+          }
+          if (tabGuest) {
+            tabGuest.className = "btn btn-secondary btn-sm";
+          }
+
+          const members = (this.data.members || []).filter(m => m.status !== 'deleted');
+          container.innerHTML = `
+            <div class="form-group">
+              <label class="form-label">Select Registered Member *</label>
+              <select id="admin-reg-member-select" class="form-select" onchange="app.onAdminRegMemberSelect('${head.id}')">
+                <option value="">-- Choose Member (${members.length} enrolled) --</option>
+                ${members.map(m => `
+                  <option value="${m.id}">${m.name} (+91 ${m.mobile}) - ${(m.category || '').replace('_', ' ').toUpperCase()} (${m.company || 'Broker'})</option>
+                `).join('')}
+              </select>
+            </div>
+
+            <div id="admin-reg-member-details" style="display: none; background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 12px;"></div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;">
+              <button type="button" onclick="app.closeModal()" class="btn btn-secondary">Cancel</button>
+              <button type="button" id="admin-reg-submit-btn" disabled onclick="app.submitAdminMemberReg('${head.id}')" class="btn btn-primary">
+                Proceed to Payment & Invoice →
+              </button>
+            </div>
+          `;
+        } else {
+          if (tabMem) {
+            tabMem.className = "btn btn-secondary btn-sm";
+          }
+          if (tabGuest) {
+            tabGuest.className = "btn btn-primary btn-sm";
+            tabGuest.style.background = "";
+            tabGuest.style.borderColor = "";
+          }
+
+          container.innerHTML = `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div class="form-group">
+                <label class="form-label">Full Name *</label>
+                <input type="text" id="admin-reg-guest-name" required placeholder="Delegate Name" class="form-input">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Mobile Number *</label>
+                <input type="tel" id="admin-reg-guest-mobile" required placeholder="10-digit mobile" class="form-input">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Email Address *</label>
+                <input type="email" id="admin-reg-guest-email" required placeholder="delegate@domain.com" class="form-input">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Company / Firm Name</label>
+                <input type="text" id="admin-reg-guest-company" placeholder="Agency or Firm" class="form-input">
+              </div>
+              <div class="form-group">
+                <label class="form-label">GSTIN (Optional)</label>
+                <input type="text" id="admin-reg-guest-gstin" placeholder="29ABCDE1234F1Z5" class="form-input" style="text-transform: uppercase;">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Billing Address</label>
+                <input type="text" id="admin-reg-guest-address" placeholder="City, State" class="form-input">
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;">
+              <button type="button" onclick="app.closeModal()" class="btn btn-secondary">Cancel</button>
+              <button type="button" onclick="app.submitAdminGuestReg('${head.id}')" class="btn btn-primary">
+                Proceed to Payment & Invoice →
+              </button>
+            </div>
+          `;
+        }
+      },
+
+      onAdminRegMemberSelect(headId) {
+        const select = document.getElementById("admin-reg-member-select");
+        const details = document.getElementById("admin-reg-member-details");
+        const btn = document.getElementById("admin-reg-submit-btn");
+        if (!select || !details || !btn) return;
+
+        const memId = select.value;
+        if (!memId) {
+          details.style.display = "none";
+          btn.disabled = true;
+          return;
+        }
+
+        const mem = (this.data.members || []).find(m => m.id === memId);
+        if (!mem) return;
+
+        const head = this.data.heads.find(h => h.id === headId);
+        const price = head ? this.getHeadPrice(head, mem.category) : 0;
+
+        details.style.display = "block";
+        details.innerHTML = `
+          <div style="font-weight: 700; color: #fff; font-size: 13px;">${mem.name}</div>
+          <div style="color: #38bdf8; margin-top: 2px;">Category: <strong>${(mem.category || '').replace('_', ' ').toUpperCase()}</strong> • Firm: ${mem.company || 'Brokerage'}</div>
+          <div style="color: var(--text-muted); margin-top: 2px;">Phone: +91 ${mem.mobile} • Email: ${mem.email || 'N/A'}</div>
+          ${mem.gstin ? `<div style="color: #38bdf8; margin-top: 2px;">GSTIN: ${mem.gstin}</div>` : ''}
+          <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--card-border); font-size: 12px; color: #34d399; font-weight: 700;">
+            Base Price: ₹${price ? Number(price).toLocaleString('en-IN') : '0'} (+ 18% GST)
+          </div>
+        `;
+        btn.disabled = false;
+      },
+
+      submitAdminMemberReg(headId) {
+        const select = document.getElementById("admin-reg-member-select");
+        const memId = select ? select.value : null;
+        if (!memId) {
+          alert("Please select a member first.");
+          return;
+        }
+        const mem = (this.data.members || []).find(m => m.id === memId);
+        if (!mem) return;
+
+        this.loggedInMember = mem;
+        this.openPaymentModal(headId, 'member');
+      },
+
+      submitAdminGuestReg(headId) {
+        const name = (document.getElementById("admin-reg-guest-name")?.value || "").trim();
+        const mobile = (document.getElementById("admin-reg-guest-mobile")?.value || "").trim();
+        const email = (document.getElementById("admin-reg-guest-email")?.value || "").trim();
+        const company = (document.getElementById("admin-reg-guest-company")?.value || "").trim();
+        const gstin = (document.getElementById("admin-reg-guest-gstin")?.value || "").trim();
+        const address = (document.getElementById("admin-reg-guest-address")?.value || "").trim();
+
+        if (!name || !mobile || !email) {
+          alert("Name, mobile number, and email are mandatory.");
+          return;
+        }
+
+        this.guestInfo = { name, mobile, email, company, gstin, address };
+        this.guestOtpState = { mobile: mobile.slice(-10), verified: true, attempts: 0 };
+        this.openPaymentModal(headId, 'guest');
+      },
+
       // CREATE PAYMENT HEAD MODAL
       openNewHeadModal() {
+        const defaultDate = this.getTodayDateOnly();
+        const defaultCutoff = `${defaultDate}T23:59`;
         document.getElementById("modal-root").innerHTML = `
           <div class="modal-overlay" onclick="app.closeModal(event)">
             <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 650px;">
@@ -4108,13 +4477,15 @@ ${head.writeup || 'No detailed write-up provided.'}
                   </div>
                   <div class="form-group">
                     <label class="form-label">Event Date *</label>
-                    <input type="date" id="new-head-date" required value="2026-11-20" class="form-input" onchange="app.validateHeadCodeInput('new')">
+                    <input type="date" id="new-head-date" required value="${defaultDate}" class="form-input" onchange="app.onNewHeadDateChange(this.value)">
                   </div>
                   <div class="form-group">
                     <label class="form-label">Active Until (Cutoff) *</label>
-                    <input type="datetime-local" id="new-head-active-until" required value="2026-11-20T10:00" class="form-input" onchange="app.validateHeadCodeInput('new')">
+                    <input type="datetime-local" id="new-head-active-until" required value="${defaultCutoff}" class="form-input" onchange="app.validateHeadCodeInput('new')">
                   </div>
                 </div>
+
+                <div id="new-head-backdated-banner" style="display: none; margin-bottom: 14px;"></div>
 
                 <div class="form-group">
                   <label class="form-label">Event Venue *</label>
@@ -4180,6 +4551,41 @@ ${head.writeup || 'No detailed write-up provided.'}
         `;
 
         setTimeout(() => this.validateHeadCodeInput('new'), 50);
+      },
+
+      onNewHeadDateChange(val) {
+        this.validateHeadCodeInput('new');
+        const cutoffEl = document.getElementById("new-head-active-until");
+        const bannerEl = document.getElementById("new-head-backdated-banner");
+        const todayStr = this.getTodayDateOnly();
+        const targetFY = this.getFinancialYear(val || new Date());
+
+        if (val && val < todayStr) {
+          if (bannerEl) {
+            bannerEl.style.display = "block";
+            bannerEl.innerHTML = `
+              <div style="background: rgba(245, 158, 11, 0.12); border: 1.5px solid rgba(245, 158, 11, 0.35); border-radius: 8px; padding: 10px 14px; color: #fbbf24; font-size: 12px; line-height: 1.45;">
+                <div style="display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 13px; margin-bottom: 3px;">
+                  <span>🕒</span> <span>Back-Dated / Historic Event Detected (${targetFY.label})</span>
+                </div>
+                <div>
+                  This event took place in the past. To allow Admin entry and registrations for past delegates, the registration cutoff is maintained active (default: today 23:59). You can also adjust the cutoff date above as desired.
+                </div>
+              </div>
+            `;
+          }
+          if (cutoffEl) {
+            cutoffEl.value = `${todayStr}T23:59`;
+          }
+        } else {
+          if (bannerEl) {
+            bannerEl.style.display = "none";
+            bannerEl.innerHTML = "";
+          }
+          if (cutoffEl && val) {
+            cutoffEl.value = `${val}T23:59`;
+          }
+        }
       },
 
       updateWordCount(text) {
@@ -5861,9 +6267,10 @@ Participants receive official CREA(I) accreditation credits, certified study mat
           return;
         }
 
-        // RULE: Attendance and gift collection only allowed on the day of the event held
+        // RULE: Attendance and gift collection allowed on event day, or anytime by authenticated Admin
         const eventHead = head || this.data.heads.find(h => h.id === payment.headId || h.code === payment.headCode);
-        if (eventHead && eventHead.eventDate) {
+        const isAdminScanner = Boolean(this.isAdminAuthenticated || this.currentTab === 'admin');
+        if (!isAdminScanner && !this.isHeadLive(eventHead) && eventHead && eventHead.eventDate) {
           const eventDateStr = this.getEventDateOnly(eventHead.eventDate);
           const todayStr = this.getTodayDateOnly();
           if (eventDateStr !== todayStr) {
@@ -6294,7 +6701,8 @@ Participants receive official CREA(I) accreditation credits, certified study mat
 
       async toggleAttendance(invoiceNo, headId) {
         const head = this.data.heads.find(h => h.id === headId);
-        if (!this.isHeadLive(head) && head && head.eventDate) {
+        const isAdmin = Boolean(this.isAdminAuthenticated || this.currentTab === 'admin');
+        if (!isAdmin && !this.isHeadLive(head) && head && head.eventDate) {
           const eventDateStr = this.getEventDateOnly(head.eventDate);
           const todayStr = this.getTodayDateOnly();
           if (eventDateStr !== todayStr) {
@@ -6334,7 +6742,8 @@ Participants receive official CREA(I) accreditation credits, certified study mat
           alert(`🚫 Gift Distribution Disabled: Delegate Kit & Welcome Gift distribution for "${head.title}" has not been approved by Admin yet.\n\nPlease click "🎁 Approve Gifts Now" in the banner above before marking gifts.`);
           return;
         }
-        if (!this.isHeadLive(head) && head && head.eventDate) {
+        const isAdmin = Boolean(this.isAdminAuthenticated || this.currentTab === 'admin');
+        if (!isAdmin && !this.isHeadLive(head) && head && head.eventDate) {
           const eventDateStr = this.getEventDateOnly(head.eventDate);
           const todayStr = this.getTodayDateOnly();
           if (eventDateStr !== todayStr) {

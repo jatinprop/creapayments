@@ -16,7 +16,7 @@ export default async function handler(req, res) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-    const { invoiceNo, headId, mode, action, forceToggle } = body;
+    const { invoiceNo, headId, mode, action, forceToggle, isAdmin } = body;
 
     if (!invoiceNo) {
       return res.status(400).json({ success: false, error: "Invoice number or QR payload is required." });
@@ -27,7 +27,8 @@ export default async function handler(req, res) {
       headId,
       mode: mode || "attendance",
       action,
-      forceToggle
+      forceToggle: Boolean(forceToggle),
+      isAdmin: Boolean(isAdmin || forceToggle)
     });
     return res.status(result.success ? 200 : 400).json(result);
   } catch (error) {
