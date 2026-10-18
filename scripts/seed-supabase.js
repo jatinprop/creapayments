@@ -83,6 +83,7 @@ async function seed() {
       venue: h.venue || "CREA(I) Centre, Bangalore",
       active_until: h.activeUntil,
       status: h.status || "active",
+      priority: Number(h.priority || 3),
       prices: h.prices || {},
       writeup: h.writeup || ""
     }));
@@ -129,6 +130,7 @@ async function seed() {
       payer_name: p.payerName,
       payer_mobile: p.payerMobile,
       payer_email: p.payerEmail,
+      payer_company: p.payerCompany || "",
       payer_gstin: p.payerGstin || null,
       payer_address: p.payerAddress || null,
       attended: Boolean(p.attended),

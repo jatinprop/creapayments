@@ -18,13 +18,13 @@ export default async function handler(req, res) {
     const { action, id, status, paymentMeans, description, createInvoice, headId, member, bulkText } = body;
 
     // 1. Toggle member status
-    if (action === "toggle_status" || (id && status && !member && !bulkText)) {
+    if (action === "toggle_status" || (id && status && !member && !bulkText && paymentMeans === undefined && description === undefined)) {
       const updated = await setMemberStatus(id, status);
       return res.status(200).json({ success: true, member: updated });
     }
 
     // 2. Manual activation with payment means and description
-    if (action === "manual_activate") {
+    if (action === "manual_activate" || (id && (paymentMeans !== undefined || description !== undefined))) {
       const result = await manualActivateMember({ id, paymentMeans, description, createInvoice, headId });
       return res.status(200).json({ success: true, ...result });
     }
