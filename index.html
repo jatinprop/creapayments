@@ -562,6 +562,29 @@
           const res = await fetch("/api/data");
           if (res.ok) {
             const json = await res.json();
+            // Merge with any payments and updated counters stored locally
+            const localRaw = localStorage.getItem("crea_data_store");
+            if (localRaw) {
+              try {
+                const local = JSON.parse(localRaw);
+                const serverPayments = (json.data && json.data.payments) || [];
+                const localPayments = (local && local.payments) || [];
+                const mergedPayments = [...serverPayments];
+                for (const lp of localPayments) {
+                  if (!mergedPayments.some(sp => (sp.invoiceNo && lp.invoiceNo && sp.invoiceNo === lp.invoiceNo) || (sp.id && lp.id && sp.id === lp.id))) {
+                    mergedPayments.unshift(lp);
+                  }
+                }
+                if (json.data) {
+                  json.data.payments = mergedPayments;
+                  if (local.invoiceCounter && local.invoiceCounter > (json.data.invoiceCounter || 0)) {
+                    json.data.invoiceCounter = local.invoiceCounter;
+                  }
+                }
+              } catch(parseErr) {
+                console.warn("Could not parse local data store:", parseErr);
+              }
+            }
             this.data = json.data;
           } else {
             throw new Error("Local API offline");
@@ -1553,7 +1576,15 @@
       renderGuestPortal() {
         const now = new Date();
 
-        // Strictly omit deactivated, deleted, or expired events
+        const guestMobile = (this.guestInfo.mobile || "").trim();
+        const guestEmail = (this.guestInfo.email || "").trim().toLowerCase();
+        const guestPayments = (guestMobile || guestEmail) ? (this.data.payments || []).filter(p => {
+          const matchMob = guestMobile && this.cleanMobile(p.payerMobile) === this.cleanMobile(guestMobile);
+          const matchEmail = guestEmail && (p.payerEmail || "").toLowerCase() === guestEmail;
+          return (matchMob || matchEmail) && p.status === 'success';
+        }) : [];
+
+        // Strictly omit deactivated, deleted, expired, or already-registered events
         const activeNonMemberHeads = (this.data.heads || []).filter(h => {
           const isDeactivated = h.status === 'deactivated' || h.status === 'inactive';
           const isDeleted = h.status === 'deleted' || h.isDeleted;
@@ -1562,8 +1593,9 @@
           if (isMem) return false;
           const price = h.prices ? h.prices.non_member : null;
           const hasPrice = price !== null && price !== undefined && price !== "";
+          const alreadyPaid = guestPayments.some(p => p.headId === h.id || p.headCode === h.code);
 
-          return !isDeactivated && !isDeleted && !isExpired && hasPrice;
+          return !isDeactivated && !isDeleted && !isExpired && hasPrice && !alreadyPaid;
         });
 
         // Sort guest open heads strictly by priority ascending (Priority 1 = Top Priority)
@@ -1575,14 +1607,6 @@
           const bDate = b.eventDate ? new Date(b.eventDate).getTime() : 0;
           return aDate - bDate;
         });
-
-        const guestMobile = (this.guestInfo.mobile || "").trim();
-        const guestEmail = (this.guestInfo.email || "").trim().toLowerCase();
-        const guestPayments = (guestMobile || guestEmail) ? (this.data.payments || []).filter(p => {
-          const matchMob = guestMobile && p.payerMobile === guestMobile;
-          const matchEmail = guestEmail && (p.payerEmail || "").toLowerCase() === guestEmail;
-          return (matchMob || matchEmail) && p.status === 'success';
-        }) : [];
 
         return `
           <div style="margin-bottom: 28px;">
@@ -2808,6 +2832,17 @@ ${head.writeup || 'No detailed write-up provided.'}
             return;
           }
 
+          // GUARD: Check if guest has already registered for this event
+          const alreadyPaidGuest = (this.data.payments || []).some(p =>
+            this.isPaymentForMember(p, { mobile: payerMobile, email: payerEmail }) &&
+            (p.headId === head.id || p.headCode === head.code) &&
+            p.status === 'success'
+          );
+          if (alreadyPaidGuest) {
+            alert(`⚠️ You have already registered and paid for "${head.title}".\n\nDuplicate payment is not allowed. Your tax invoice and entry passes are ready under "Found Existing Registrations" on this page.`);
+            return;
+          }
+
           // Guest Mobile OTP Verification Check
           const cleanMob = payerMobile.replace(/\D/g, "").slice(-10);
           if (!this.guestOtpState.verified || this.guestOtpState.mobile !== cleanMob) {
@@ -2952,6 +2987,19 @@ ${head.writeup || 'No detailed write-up provided.'}
             this.render();
             return;
           }
+        } else {
+          // 2. Client-side guard against duplicate training/event registrations
+          const hasExistingProg = (this.data.payments || []).some(p => {
+            if (p.status !== 'success') return false;
+            if (p.headId !== head.id && p.headCode !== head.code) return false;
+            return this.isPaymentForMember(p, { id: payerId, mobile: payerMobile, email: payerEmail });
+          });
+          if (hasExistingProg) {
+            alert(`⚠️ You have already registered and paid for "${head.title}".\n\nDuplicate payment is not allowed. You can view and download your official Tax Invoice and QR Passes under "My Registered Programs".`);
+            this.closeModal();
+            this.render();
+            return;
+          }
         }
 
         const basePrice = this.getHeadPrice(head, payerCategory);
@@ -2975,10 +3023,57 @@ ${head.writeup || 'No detailed write-up provided.'}
           });
           if (res.ok) {
             const result = await res.json();
-            // Refresh data from server
-            const refreshed = await fetch("/api/data");
-            const j = await refreshed.json();
-            this.data = j.data;
+            const paidRecord = result.payment;
+
+            // Immediately merge paidRecord into this.data.payments
+            if (paidRecord) {
+              if (!this.data.payments) this.data.payments = [];
+              const exists = this.data.payments.some(p => p.invoiceNo === paidRecord.invoiceNo || p.id === paidRecord.id);
+              if (!exists) {
+                this.data.payments.unshift(paidRecord);
+              }
+            }
+
+            // Refresh data from server while strictly preserving local & new payments
+            try {
+              const refreshed = await fetch("/api/data");
+              if (refreshed.ok) {
+                const j = await refreshed.json();
+                if (j && j.data) {
+                  const serverPayments = j.data.payments || [];
+                  const clientPayments = this.data.payments || [];
+                  const mergedPayments = [...serverPayments];
+                  for (const cp of clientPayments) {
+                    if (!mergedPayments.some(sp => sp.invoiceNo === cp.invoiceNo || sp.id === cp.id)) {
+                      mergedPayments.unshift(cp);
+                    }
+                  }
+                  this.data = {
+                    ...j.data,
+                    payments: mergedPayments,
+                    invoiceCounter: Math.max(j.data.invoiceCounter || 0, this.data.invoiceCounter || 0, (paidRecord?.serial || 0))
+                  };
+                }
+              }
+            } catch (refErr) {
+              console.warn("Could not refresh server data:", refErr);
+            }
+
+            // If membership payment, auto-activate the member
+            if (isMem && (payerId || payerMobile || payerEmail)) {
+              const mem = this.findMember({ id: payerId, mobile: payerMobile, email: payerEmail });
+              if (mem) {
+                mem.status = "active";
+                mem.lastPaidFY = fy.code;
+                mem.paymentMeans = "Online Gateway";
+                mem.activationNote = (mem.category === 'associate_member') ? `Associate Fee Paid (Invoice ${paidRecord?.invoiceNo || ''})` : `Paid Online (Invoice ${paidRecord?.invoiceNo || ''})`;
+                mem.deactivationReason = null;
+                if (payerCompany && (!mem.company || mem.company === "Independent Realtor" || mem.company === "CREA Member Brokerage")) {
+                  mem.company = payerCompany;
+                }
+              }
+            }
+
             this.normalizeData();
             // Sync loggedInMember with refreshed member data
             if (this.loggedInMember) {
@@ -2996,7 +3091,7 @@ ${head.writeup || 'No detailed write-up provided.'}
             }
             this.saveToStorage();
             this.render();
-            this.showPaymentSuccess(result.payment);
+            this.showPaymentSuccess(paidRecord || result.payment);
             return;
           } else {
             const errJson = await res.json().catch(() => ({}));
@@ -3019,6 +3114,18 @@ ${head.writeup || 'No detailed write-up provided.'}
           });
           if (hasExisting) {
             alert(`⚠️ Duplicate payment prevented: Annual Membership for ${fy.label} has already been recorded.`);
+            this.closeModal();
+            this.render();
+            return;
+          }
+        } else {
+          const hasExistingProg = (this.data.payments || []).some(p => {
+            if (p.status !== 'success') return false;
+            if (p.headId !== head.id && p.headCode !== head.code) return false;
+            return this.isPaymentForMember(p, { id: payerId, mobile: payerMobile, email: payerEmail });
+          });
+          if (hasExistingProg) {
+            alert(`⚠️ Duplicate payment prevented: You have already registered and paid for "${head.title}".`);
             this.closeModal();
             this.render();
             return;
@@ -3153,8 +3260,41 @@ ${head.writeup || 'No detailed write-up provided.'}
 
       // INVOICE VIEWER & PRINTABLE TAX INVOICE WITH 2 QR CODES (ATTENDANCE & GIFT)
       viewInvoice(invoiceNo) {
-        const payment = this.data.payments.find(p => p.invoiceNo === invoiceNo);
-        if (!payment) return;
+        if (!invoiceNo) {
+          alert("Tax Invoice number was not specified.");
+          return;
+        }
+
+        const cleanInv = String(invoiceNo).trim().toLowerCase();
+        let payment = (this.data.payments || []).find(p =>
+          (p.invoiceNo && p.invoiceNo.trim().toLowerCase() === cleanInv) ||
+          (p.id && String(p.id).trim().toLowerCase() === cleanInv)
+        );
+
+        if (!payment) {
+          try {
+            const raw = localStorage.getItem("crea_data_store");
+            if (raw) {
+              const d = JSON.parse(raw);
+              payment = (d.payments || []).find(p =>
+                (p.invoiceNo && p.invoiceNo.trim().toLowerCase() === cleanInv) ||
+                (p.id && String(p.id).trim().toLowerCase() === cleanInv)
+              );
+              if (payment) {
+                if (!this.data.payments) this.data.payments = [];
+                if (!this.data.payments.some(p => p.invoiceNo === payment.invoiceNo)) {
+                  this.data.payments.unshift(payment);
+                }
+              }
+            }
+          } catch(e) {}
+        }
+
+        if (!payment) {
+          alert(`Tax Invoice "${invoiceNo}" could not be located in records. Please check your registered programs or contact CREA administration.`);
+          return;
+        }
+
         const head = this.data.heads.find(h => h.id === payment.headId || h.code === payment.headCode);
         const member = this.data.members.find(m => m.id === payment.payerId || m.mobile === payment.payerMobile);
 
@@ -3398,14 +3538,29 @@ ${head.writeup || 'No detailed write-up provided.'}
 
       // OFFICIAL MEMBERSHIP CERTIFICATE MODAL
       openCertificateModal(invoiceNo, memberId) {
-        let payment = invoiceNo ? this.data.payments.find(p => p.invoiceNo === invoiceNo) : null;
+        let cleanInv = invoiceNo ? String(invoiceNo).trim().toLowerCase() : "";
+        let payment = cleanInv ? (this.data.payments || []).find(p => (p.invoiceNo && p.invoiceNo.trim().toLowerCase() === cleanInv) || (p.id && String(p.id).trim().toLowerCase() === cleanInv)) : null;
+
+        if (cleanInv && !payment) {
+          try {
+            const raw = localStorage.getItem("crea_data_store");
+            if (raw) {
+              const d = JSON.parse(raw);
+              payment = (d.payments || []).find(p => (p.invoiceNo && p.invoiceNo.trim().toLowerCase() === cleanInv) || (p.id && String(p.id).trim().toLowerCase() === cleanInv));
+              if (payment && !this.data.payments.some(p => p.invoiceNo === payment.invoiceNo)) {
+                this.data.payments.unshift(payment);
+              }
+            }
+          } catch(e) {}
+        }
+
         let member = memberId ? this.data.members.find(m => m.id === memberId) : null;
 
         if (!member && payment) {
-          member = this.data.members.find(m => m.id === payment.payerId || m.mobile === payment.payerMobile || m.name.toLowerCase() === payment.payerName.toLowerCase());
+          member = this.data.members.find(m => m.id === payment.payerId || m.mobile === payment.payerMobile || (m.name && payment.payerName && m.name.toLowerCase() === payment.payerName.toLowerCase()));
         }
         if (!payment && member) {
-          payment = this.data.payments.find(p => (p.payerId === member.id || p.payerMobile === member.mobile) && (p.headCode === 'MEM' || (p.headTitle && p.headTitle.toLowerCase().includes('membership'))));
+          payment = (this.data.payments || []).find(p => this.isPaymentForMember(p, member) && (p.headCode === 'MEM' || (p.headTitle && p.headTitle.toLowerCase().includes('membership'))));
         }
 
         const isPaid = payment || (member && this.hasPaidMembershipForFY(member));

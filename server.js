@@ -688,6 +688,23 @@ const server = http.createServer((req, res) => {
         }
       }
 
+      // RULE: Guard against duplicate Event / Training / Conclave payment for the same payer
+      if (!isMembershipPayment && (body.payerId || body.payerMobile || body.payerEmail)) {
+        const payerQuery = { id: body.payerId, mobile: body.payerMobile, email: body.payerEmail };
+        const existingProgPay = (data.payments || []).find((p) =>
+          isPaymentForMemberOrPayer(p, payerQuery) &&
+          (p.headId === head.id || p.headCode === head.code) &&
+          p.status === "success"
+        );
+        if (existingProgPay) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({
+            success: false,
+            error: `Registration and payment for "${head.title}" has already been completed (Tax Invoice: ${existingProgPay.invoiceNo}). Duplicate payment is not allowed.`
+          }));
+        }
+      }
+
       // 18% GST Calculations
       const base = Number(basePrice);
       const cgst = Math.round(base * 0.09 * 100) / 100;
