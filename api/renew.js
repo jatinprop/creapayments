@@ -1,4 +1,4 @@
-import { supabase, readLocalData, writeLocalData } from "../lib/supabase.js";
+import { supabase, readLocalData, writeLocalData, findHeadCodeConflict, upsertHead } from "../lib/supabase.js";
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -15,12 +15,26 @@ export default async function handler(req, res) {
 
   try {
     const nextYear = new Date().getFullYear() + 1;
+    const renewalDate = `${nextYear}-04-01`;
+
+    const local = readLocalData();
+    local.heads = local.heads || [];
+
+    const existingConflict = findHeadCodeConflict(local.heads, "MEM", renewalDate);
+    if (existingConflict) {
+      return res.status(200).json({
+        success: true,
+        message: `Annual Renewal head already active for upcoming cycle: '${existingConflict.title}'`,
+        head: existingConflict
+      });
+    }
+
     const renewalHead = {
       id: `head-mem-${Date.now()}`,
       code: "MEM",
       title: `Annual CREA(I) Membership Renewal ${nextYear}-${nextYear + 1}`,
       type: "membership",
-      eventDate: `${nextYear}-04-01`,
+      eventDate: renewalDate,
       eventTime: "Full Year Access",
       venue: "All Chapters",
       activeUntil: `${nextYear + 1}-03-31T23:59:59`,
@@ -42,19 +56,23 @@ export default async function handler(req, res) {
       }
     }
 
-    const local = readLocalData();
     local.members = local.members || [];
     local.members.forEach((m) => {
       if (m.category === "board_member" || m.category === "new_member") m.category = "member";
+      m.status = "deactivated";
+      m.lastPaidFY = null;
+      m.deactivationReason = `Pending Annual Renewal for FY ${nextYear}-${nextYear + 1}`;
     });
-    local.heads = local.heads || [];
-    local.heads.unshift(renewalHead);
+
     writeLocalData(local);
+
+    // Save renewal head via upsertHead
+    const savedHead = await upsertHead(renewalHead);
 
     return res.status(200).json({
       success: true,
-      message: `Annual Renewal successfully activated for all members! Head '${renewalHead.title}' created for dues settlement.`,
-      head: renewalHead
+      message: `Annual Renewal successfully activated for all members! Head '${savedHead.title}' created for dues settlement.`,
+      head: savedHead
     });
   } catch (error) {
     console.error("API /renew error:", error);

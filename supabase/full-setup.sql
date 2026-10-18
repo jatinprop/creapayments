@@ -51,7 +51,7 @@ CREATE INDEX idx_members_parent ON public.members(parent_member_id);
 -- 2. Payment Heads Table
 CREATE TABLE public.payment_heads (
   id TEXT PRIMARY KEY,
-  code TEXT NOT NULL UNIQUE,
+  code TEXT NOT NULL,
   title TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('membership', 'training', 'event')),
   event_date TEXT NOT NULL,
@@ -67,6 +67,9 @@ CREATE TABLE public.payment_heads (
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
+
+-- Drop legacy global unique constraint on headcode if existing, allowing headcode reuse across different financial years:
+ALTER TABLE public.payment_heads DROP CONSTRAINT IF EXISTS payment_heads_code_key;
 
 CREATE INDEX idx_heads_code ON public.payment_heads(code);
 CREATE INDEX idx_heads_status ON public.payment_heads(status);

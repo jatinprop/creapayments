@@ -616,9 +616,16 @@
       },
 
       getFinancialYear(date = new Date()) {
-        const d = new Date(date);
-        const year = d.getFullYear();
-        const month = d.getMonth() + 1; // 1-12
+        let year, month;
+        if (typeof date === "string" && /^\d{4}-\d{2}/.test(date)) {
+          const parts = date.split(/[-T :]/);
+          year = parseInt(parts[0], 10);
+          month = parseInt(parts[1], 10);
+        } else {
+          const d = new Date(date);
+          year = d.getFullYear();
+          month = d.getMonth() + 1; // 1-12
+        }
         let startYear, endYear;
         if (month >= 4) {
           startYear = year;
@@ -636,6 +643,55 @@
           startYear,
           endYear
         };
+      },
+
+      getHeadFinancialYear(head) {
+        if (!head) return this.getFinancialYear();
+        const dateVal = head.eventDate || head.event_date || head.activeUntil || head.active_until || head.created_at || new Date();
+        return this.getFinancialYear(dateVal);
+      },
+
+      validateHeadCodeInput(mode = 'new', headId = null) {
+        const isNew = mode === 'new';
+        const codeEl = document.getElementById(isNew ? "new-head-code" : "edit-head-code");
+        const dateEl = document.getElementById(isNew ? "new-head-date" : "edit-head-date");
+        const feedbackEl = document.getElementById(isNew ? "new-head-code-feedback" : "edit-head-code-feedback");
+        const fyBadge = document.getElementById(isNew ? "new-head-fy-badge" : "edit-head-fy-badge");
+        if (!codeEl || !feedbackEl) return null;
+
+        const rawCode = (codeEl.value || "").trim().toUpperCase();
+        const eventDate = dateEl ? dateEl.value : null;
+        const targetFY = this.getFinancialYear(eventDate || new Date());
+
+        if (fyBadge) {
+          fyBadge.textContent = `${targetFY.label} (${targetFY.fullLabel})`;
+        }
+
+        if (!rawCode) {
+          feedbackEl.innerHTML = "";
+          codeEl.style.borderColor = "";
+          return null;
+        }
+
+        // Look for conflict in this.data.heads within targetFY
+        const conflict = (this.data.heads || []).find(h => {
+          if (!isNew && h.id === headId) return false;
+          if (h.status === "deleted" || h.isDeleted) return false;
+          const hCode = (h.code || "").trim().toUpperCase();
+          if (hCode !== rawCode) return false;
+          const hFY = this.getHeadFinancialYear(h);
+          return hFY.code === targetFY.code;
+        });
+
+        if (conflict) {
+          codeEl.style.borderColor = "#ef4444";
+          feedbackEl.innerHTML = `<span style="color: #f87171; font-weight: 600;">⚠️ This headcode already exists with "${this.escapeHtml(conflict.title)}" in ${targetFY.label}</span>`;
+          return conflict;
+        } else {
+          codeEl.style.borderColor = "#10b981";
+          feedbackEl.innerHTML = `<span style="color: #34d399; font-size: 11px;">✓ Available for ${targetFY.label} (${targetFY.fullLabel})</span>`;
+          return null;
+        }
       },
 
       getTodayDateOnly() {
@@ -4016,14 +4072,18 @@ ${head.writeup || 'No detailed write-up provided.'}
               </div>
 
               <form onsubmit="app.saveNewHead(event)">
-                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+                <div style="display: grid; grid-template-columns: 2fr 1.2fr; gap: 12px;">
                   <div class="form-group">
                     <label class="form-label">Head Title *</label>
                     <input type="text" id="new-head-title" required placeholder="e.g. Masterclass on Commercial Leasing" class="form-input">
                   </div>
                   <div class="form-group">
-                    <label class="form-label">Head Code (e.g. TRN3, EVT2) *</label>
-                    <input type="text" id="new-head-code" required placeholder="TRN3" class="form-input" style="text-transform: uppercase;">
+                    <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                      <span>Head Code *</span>
+                      <span id="new-head-fy-badge" style="font-size: 10px; color: #38bdf8; font-weight: 600;"></span>
+                    </label>
+                    <input type="text" id="new-head-code" required placeholder="TRN3" class="form-input" style="text-transform: uppercase;" oninput="app.validateHeadCodeInput('new')">
+                    <div id="new-head-code-feedback" style="font-size: 11px; margin-top: 4px; min-height: 16px;"></div>
                   </div>
                 </div>
 
@@ -4048,11 +4108,11 @@ ${head.writeup || 'No detailed write-up provided.'}
                   </div>
                   <div class="form-group">
                     <label class="form-label">Event Date *</label>
-                    <input type="date" id="new-head-date" required value="2026-11-20" class="form-input">
+                    <input type="date" id="new-head-date" required value="2026-11-20" class="form-input" onchange="app.validateHeadCodeInput('new')">
                   </div>
                   <div class="form-group">
                     <label class="form-label">Active Until (Cutoff) *</label>
-                    <input type="datetime-local" id="new-head-active-until" required value="2026-11-20T10:00" class="form-input">
+                    <input type="datetime-local" id="new-head-active-until" required value="2026-11-20T10:00" class="form-input" onchange="app.validateHeadCodeInput('new')">
                   </div>
                 </div>
 
@@ -4118,6 +4178,8 @@ ${head.writeup || 'No detailed write-up provided.'}
             </div>
           </div>
         `;
+
+        setTimeout(() => this.validateHeadCodeInput('new'), 50);
       },
 
       updateWordCount(text) {
@@ -4168,6 +4230,31 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
         const venue = document.getElementById("new-head-venue").value.trim();
         const writeup = document.getElementById("new-head-writeup").value.trim();
 
+        if (!title || !code) {
+          alert("Head title and head code are mandatory.");
+          return;
+        }
+
+        // Strict Financial Year Uniqueness Rule:
+        const targetFY = this.getFinancialYear(eventDate || activeUntil || new Date());
+        const conflict = (this.data.heads || []).find(h => {
+          if (h.status === "deleted" || h.isDeleted) return false;
+          const hCode = (h.code || "").trim().toUpperCase();
+          if (hCode !== code) return false;
+          const hFY = this.getHeadFinancialYear(h);
+          return hFY.code === targetFY.code;
+        });
+
+        if (conflict) {
+          alert(`⚠️ Duplicate Head Code:\n\nThis headcode "${code}" already exists with "${conflict.title}" in ${targetFY.label} (${targetFY.fullLabel}).\n\nEach Training / Event / Membership must have a unique headcode within the same financial year (1st April to 31st March).\n\nPlease choose a different headcode.`);
+          const codeEl = document.getElementById("new-head-code");
+          if (codeEl) {
+            codeEl.focus();
+            codeEl.select();
+          }
+          return;
+        }
+
         const memPriceVal = document.getElementById("price-member").value;
         const assocPriceVal = document.getElementById("price-associate_member")?.value || document.getElementById("price-new_member")?.value || (type !== 'membership' && code !== 'MEM' ? memPriceVal : null);
         const giftEnabled = Boolean(document.getElementById("new-head-gift-enabled")?.checked);
@@ -4194,18 +4281,22 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
           writeup
         };
 
-        this.data.heads.unshift(newHead);
-        this.saveToStorage();
-
         // Also push to server if running
         try {
-          await fetch("/api/head", {
+          const res = await fetch("/api/head", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(newHead)
           });
+          const json = await res.json();
+          if (!res.ok || (!json.success && json.error)) {
+            alert(`⚠️ Error saving head:\n\n${json.error || 'Server rejected payment head'}`);
+            return;
+          }
         } catch(err){}
 
+        this.data.heads.unshift(newHead);
+        this.saveToStorage();
         this.closeModal();
         this.render();
       },
@@ -4217,6 +4308,8 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
           alert("Program / payment head not found.");
           return;
         }
+
+        this._currentEditingHeadId = head.id;
 
         // Format activeUntil for datetime-local
         let activeUntilFormatted = "";
@@ -4273,10 +4366,14 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
                     <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">Modifying this updates the display title across all member portals, invoices, and payment receipts.</div>
                   </div>
 
-                  <div style="display: grid; grid-template-columns: 0.8fr 1fr 1.1fr 1.2fr; gap: 12px;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr 1.1fr 1.2fr; gap: 12px;">
                     <div class="form-group" style="margin-bottom: 0;">
-                      <label class="form-label">Head Code *</label>
-                      <input type="text" id="edit-head-code" required value="${app.escapeHtml(head.code)}" class="form-input" style="text-transform: uppercase;">
+                      <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Head Code *</span>
+                        <span id="edit-head-fy-badge" style="font-size: 10px; color: #38bdf8; font-weight: 600;"></span>
+                      </label>
+                      <input type="text" id="edit-head-code" required value="${app.escapeHtml(head.code)}" class="form-input" style="text-transform: uppercase;" oninput="app.validateHeadCodeInput('edit', '${head.id}')">
+                      <div id="edit-head-code-feedback" style="font-size: 11px; margin-top: 4px; min-height: 16px;"></div>
                     </div>
                     <div class="form-group" style="margin-bottom: 0;">
                       <label class="form-label">Head Type *</label>
@@ -4331,11 +4428,11 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
                   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
                     <div class="form-group" style="margin-bottom: 0;">
                       <label class="form-label">Event / Program Date *</label>
-                      <input type="date" id="edit-head-date" required value="${head.eventDate || ''}" class="form-input">
+                      <input type="date" id="edit-head-date" required value="${head.eventDate || ''}" class="form-input" onchange="app.validateHeadCodeInput('edit', '${head.id}')">
                     </div>
                     <div class="form-group" style="margin-bottom: 0;">
                       <label class="form-label">Registration Cutoff (Active Until) *</label>
-                      <input type="datetime-local" id="edit-head-active-until" required value="${activeUntilFormatted}" class="form-input">
+                      <input type="datetime-local" id="edit-head-active-until" required value="${activeUntilFormatted}" class="form-input" onchange="app.validateHeadCodeInput('edit', '${head.id}')">
                     </div>
                   </div>
 
@@ -4489,6 +4586,8 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
         ['associate_member', 'new_member', 'member', 'non_member'].forEach(tier => {
           app.updateEditPriceGST(tier);
         });
+
+        setTimeout(() => this.validateHeadCodeInput('edit', head.id), 50);
       },
 
       updateEditModalStatusBadge(val) {
@@ -4535,6 +4634,10 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
           const hr = String(d.getHours()).padStart(2, "0");
           const min = String(d.getMinutes()).padStart(2, "0");
           cutoffInput.value = `${y}-${m}-${dt}T${hr}:${min}`;
+        }
+
+        if (this._currentEditingHeadId) {
+          this.validateHeadCodeInput('edit', this._currentEditingHeadId);
         }
 
         if (feedback) {
@@ -4660,6 +4763,61 @@ Participants receive official CREA(I) accreditation credits, certified study mat
           non_member: parsePrice("edit-price-non_member")
         };
 
+        if (!title || !code) {
+          alert("Head title and head code are mandatory.");
+          return;
+        }
+
+        // Strict Financial Year Uniqueness Rule:
+        const targetFY = this.getFinancialYear(eventDate || activeUntil || new Date());
+        const conflict = (this.data.heads || []).find(h => {
+          if (h.id === headId) return false;
+          if (h.status === "deleted" || h.isDeleted) return false;
+          const hCode = (h.code || "").trim().toUpperCase();
+          if (hCode !== code) return false;
+          const hFY = this.getHeadFinancialYear(h);
+          return hFY.code === targetFY.code;
+        });
+
+        if (conflict) {
+          alert(`⚠️ Duplicate Head Code:\n\nThis headcode "${code}" already exists with "${conflict.title}" in ${targetFY.label} (${targetFY.fullLabel}).\n\nEach Training / Event / Membership must have a unique headcode within the same financial year (1st April to 31st March).\n\nPlease choose a different headcode.`);
+          const codeEl = document.getElementById("edit-head-code");
+          if (codeEl) {
+            codeEl.focus();
+            codeEl.select();
+          }
+          return;
+        }
+
+        // Also push to server & Supabase
+        try {
+          const res = await fetch("/api/head", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: head.id,
+              title,
+              code,
+              type,
+              status,
+              priority,
+              isLive,
+              giftEnabled,
+              eventDate,
+              eventTime: eventTime || head.eventTime || "Full Day",
+              activeUntil,
+              venue,
+              prices,
+              writeup
+            })
+          });
+          const json = await res.json();
+          if (!res.ok || (!json.success && json.error)) {
+            alert(`⚠️ Error saving head:\n\n${json.error || 'Server rejected payment head'}`);
+            return;
+          }
+        } catch(err){}
+
         // Update properties
         head.title = title;
         head.code = code;
@@ -4680,31 +4838,6 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         }
 
         this.saveToStorage();
-
-        // Also push to server & Supabase
-        try {
-          await fetch("/api/head", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              id: head.id,
-              title,
-              code,
-              type,
-              status,
-              priority,
-              isLive,
-              giftEnabled,
-              eventDate,
-              eventTime: head.eventTime,
-              activeUntil,
-              venue,
-              prices,
-              writeup
-            })
-          });
-        } catch(err){}
-
         this.closeModal();
         this.render();
         alert(`✓ Program '${title}' modified and saved successfully!`);
@@ -6342,11 +6475,23 @@ Participants receive official CREA(I) accreditation credits, certified study mat
       },
 
       // 1-CLICK YEARLY MEMBERSHIP RENEWAL (1st April Cycle)
-      triggerYearlyRenewal() {
+      async triggerYearlyRenewal() {
         if (!confirm("Activate 1-Click Yearly Membership Renewal? This will deactivate all members for the upcoming financial year until new membership dues are settled.")) return;
 
         const nextYear = new Date().getFullYear() + 1;
-        const fy = `${String(nextYear).slice(-2)}${String(nextYear + 1).slice(-2)}`;
+        const targetFY = this.getFinancialYear(`${nextYear}-04-01`);
+
+        // Check if renewal head already exists for upcoming FY
+        const existingRenewal = (this.data.heads || []).find(h => {
+          if (h.status === "deleted" || h.isDeleted) return false;
+          const hCode = (h.code || "").trim().toUpperCase();
+          return hCode === "MEM" && this.getHeadFinancialYear(h).code === targetFY.code;
+        });
+
+        if (existingRenewal) {
+          alert(`⚠️ Renewal Head Already Exists:\n\nAnnual renewal head '${existingRenewal.title}' is already active for ${targetFY.label} (${targetFY.fullLabel}).`);
+          return;
+        }
 
         // Deactivate all members for new FY
         this.data.members.forEach(m => {
@@ -6370,6 +6515,20 @@ Participants receive official CREA(I) accreditation credits, certified study mat
           prices: { associate_member: 5000, member: 10000, non_member: null },
           writeup: `Annual membership renewal for accredited real estate brokerages for ${nextYear}-${nextYear + 1}. Unlocks full integration with CREA Multi-Listing Exchange, legal escrow protection, and certified broker masterclasses.`
         };
+
+        // Also notify server / DB
+        try {
+          const res = await fetch("/api/head", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(renewalHead)
+          });
+          const json = await res.json();
+          if (!res.ok || (!json.success && json.error)) {
+            alert(`⚠️ Error saving renewal head:\n\n${json.error || 'Server rejected head'}`);
+            return;
+          }
+        } catch(e){}
 
         this.data.heads.unshift(renewalHead);
         this.normalizeData();
