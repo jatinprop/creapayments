@@ -165,52 +165,53 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Static File Serving
-  let relativePath = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
-  let filePath = path.join(__dirname, relativePath);
+  const resolveFile = (relPath) => {
+    const candidates = [
+      path.join(__dirname, relPath),
+      path.join(process.cwd(), relPath),
+      path.join(process.cwd(), "CREA APP", relPath)
+    ];
+    for (const c of candidates) {
+      try {
+        if (fs.existsSync(c) && fs.statSync(c).isFile()) return c;
+      } catch (e) {}
+    }
+    return null;
+  };
 
-  // Security check: ensure filePath is within __dirname
-  if (!filePath.startsWith(__dirname)) {
-    res.writeHead(403);
-    return res.end("Forbidden");
+  let relativePath = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
+  let matchedPath = resolveFile(relativePath);
+  if (!matchedPath) {
+    // SPA Fallback: Serve index.html for client-side routing
+    matchedPath = resolveFile("index.html");
   }
 
-  fs.stat(filePath, (err, stats) => {
-    if (err || !stats.isFile()) {
-      // SPA Fallback: Serve index.html for unknown client routes
-      const indexPath = path.join(__dirname, "index.html");
-      fs.readFile(indexPath, (readErr, content) => {
-        if (readErr) {
-          res.writeHead(404, { "Content-Type": "text/plain" });
-          return res.end("Not Found");
-        }
-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        return res.end(content);
-      });
-      return;
-    }
+  if (!matchedPath) {
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    return res.end("Not Found");
+  }
 
-    const ext = path.extname(filePath).toLowerCase();
-    const mimeTypes = {
-      ".html": "text/html; charset=utf-8",
-      ".js": "text/javascript",
-      ".css": "text/css",
-      ".json": "application/json",
-      ".png": "image/png",
-      ".jpg": "image/jpeg",
-      ".jpeg": "image/jpeg",
-      ".svg": "image/svg+xml",
-      ".pdf": "application/pdf",
-      ".ttf": "font/ttf",
-      ".ico": "image/x-icon",
-      ".webp": "image/webp",
-      ".woff": "font/woff",
-      ".woff2": "font/woff2"
-    };
+  const ext = path.extname(matchedPath).toLowerCase();
+  const mimeTypes = {
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript",
+    ".css": "text/css",
+    ".json": "application/json",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".svg": "image/svg+xml",
+    ".pdf": "application/pdf",
+    ".ttf": "font/ttf",
+    ".ico": "image/x-icon",
+    ".webp": "image/webp",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2"
+  };
 
-    res.writeHead(200, { "Content-Type": mimeTypes[ext] || "application/octet-stream" });
-    const stream = fs.createReadStream(filePath);
-    stream.pipe(res);
-  });
+  res.writeHead(200, { "Content-Type": mimeTypes[ext] || "application/octet-stream" });
+  const stream = fs.createReadStream(matchedPath);
+  stream.pipe(res);
 });
 
 if (!process.env.VERCEL) {
@@ -223,5 +224,3 @@ if (!process.env.VERCEL) {
     console.log(`======================================================\n`);
   });
 }
-
-export default server;
