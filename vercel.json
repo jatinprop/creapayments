@@ -10,6 +10,6 @@
     { "source": "/api/member/activate-manual", "destination": "/api/members" },
     { "source": "/api/gst/(.*)", "destination": "/api/gst?gstin=$1" },
     { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/((?!api/|assets/|.*\\.(?:jpg|jpeg|png|gif|svg|ico|pdf|ttf|woff|woff2)).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/|favicon\\.ico|.*\\..*).*)", "destination": "/index.html" }
   ]
 }
