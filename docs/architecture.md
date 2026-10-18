@@ -58,7 +58,8 @@ erDiagram
         text name
         text mobile UK
         text email
-        text category "member, new_member, board_member"
+        text category "member, associate_member"
+        text rera_number "Optional RERA certificate number"
         text company
         text city
         date joined_date
@@ -69,6 +70,8 @@ erDiagram
         text code UK "MEM, TRN1, TRN2, EVT1"
         text title
         text type "membership, training, event"
+        boolean is_live "Admin Live Event toggle"
+        boolean gift_enabled "Admin Delegate Kit approval toggle"
         timestamptz active_until
         text status "active, inactive, deactivated"
         jsonb prices "tiered prices excluding GST"

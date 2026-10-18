@@ -705,6 +705,43 @@
         }
       },
 
+      async toggleHeadGift(headId) {
+        const head = this.data.heads.find(h => h.id === headId);
+        if (!head) return;
+        const currentGift = Boolean(head.giftEnabled);
+        const newGiftState = !currentGift;
+        head.giftEnabled = newGiftState;
+        if (head.prices) head.prices.gift_enabled = newGiftState;
+        this.saveToStorage();
+
+        // If inside delegate tracker, re-render it
+        if (this._currentTrackerHeadId === headId && document.getElementById("delegate-tracker-table")) {
+          const searchInput = document.getElementById("roster-search");
+          this.openDelegateTracker(headId, searchInput ? searchInput.value : '');
+        } else {
+          this.render();
+        }
+
+        try {
+          const res = await fetch("/api/head", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: headId,
+              giftEnabled: newGiftState,
+              action: "toggle_gift"
+            })
+          });
+          const json = await res.json();
+          if (json && json.head) {
+            head.giftEnabled = Boolean(json.head.giftEnabled);
+            this.saveToStorage();
+          }
+        } catch(e) {
+          console.warn("Failed to toggle gift status on server:", e);
+        }
+      },
+
       startAutoSync() {
         if (this._syncInterval) clearInterval(this._syncInterval);
 
@@ -920,9 +957,25 @@
           return s === fyCode || s.includes(fyCode) || s.includes('2627') || s.includes('2026-2027') || s.includes('2026-27');
         };
 
-        // Pass 1: Evaluate Regular & Board Members
+        // Normalize Heads: ensure giftEnabled and clean prices
+        (this.data.heads || []).forEach(h => {
+          h.giftEnabled = Boolean(h.giftEnabled || h.gift_enabled || h.prices?.gift_enabled);
+          if (h.prices && h.prices.board_member !== undefined) {
+            delete h.prices.board_member;
+          }
+        });
+
+        // Normalize Payments: remove legacy board_member and new_member
+        (this.data.payments || []).forEach(p => {
+          if (p.payerCategory === "board_member") p.payerCategory = "member";
+          if (p.payerCategory === "new_member") p.payerCategory = "associate_member";
+        });
+
+        // Pass 1: Evaluate Primary Members
         this.data.members.forEach(m => {
+          if (m.category === "board_member") m.category = "member";
           if (m.category === "new_member") m.category = "associate_member";
+          m.reraNumber = (m.reraNumber || m.rera_number || "").trim().toUpperCase();
 
           if (m.category !== "associate_member") {
             const hasPaidCurrentFY = this.hasPaidMembershipForFY(m, fy.code);
@@ -1034,13 +1087,13 @@
         return {
           invoiceCounter: 14,
           members: [
-            { id: "mem-001", name: "Ramesh Gupta", mobile: "9800000001", email: "ramesh.gupta@crea-realty.in", category: "member", company: "Apex Prime Realty", city: "Bangalore", gstin: "29AABCR1234F1Z5", address: "Suite 401, Prestige Meridian, MG Road, Bangalore, Karnataka - 560001", status: "active", lastPaidFY: fy.code, paymentMeans: "Online Gateway", activationNote: `Paid Online (Inv: CREA/${fy.code}/MEM/0001)` },
-            { id: "mem-002", name: "Sneha Patel", mobile: "9800000002", email: "sneha.p@lotushomes.co", category: "associate_member", parentMemberId: "mem-001", parentMemberName: "Ramesh Gupta", parentMemberMobile: "9800000001", company: "Apex Prime Realty / Lotus Homes", city: "Bangalore", gstin: "29AABCL5678G2Z1", address: "#12, Lotus Arcade, 100ft Road, Indiranagar, Bangalore, Karnataka - 560038", status: "active", lastPaidFY: fy.code, paymentMeans: "Online Gateway", activationNote: "Associate Fee Paid (Main Member Ramesh Gupta Active)" },
-            { id: "mem-003", name: "Vikramaditya Rao", mobile: "9800000003", email: "v.rao@deccanproperties.com", category: "board_member", company: "Deccan Realtors & Estates", city: "Bangalore", gstin: "29AABCD9012H3Z7", address: "Ground Floor, Deccan Chambers, Lavelle Road, Bangalore, Karnataka - 560001", status: "active", lastPaidFY: fy.code, paymentMeans: "Online Gateway", activationNote: "Board Member Exemption / Paid" },
-            { id: "mem-004", name: "Anand Murthy", mobile: "9845999000", email: "anand.m@staypolis.com", category: "member", company: "Staypolis Brokerage", city: "Bangalore", gstin: "29AABCS3456J4Z3", address: "Unit 3B, Brigade Gateway, Malleshwaram, Bangalore, Karnataka - 560055", status: "active", lastPaidFY: fy.code, paymentMeans: "Online Gateway", activationNote: `Renewed ${fy.label}` },
-            { id: "mem-005", name: "Kavita Reddy", mobile: "9711288901", email: "kavita.r@reddyrealty.in", category: "associate_member", parentMemberId: "mem-004", parentMemberName: "Anand Murthy", parentMemberMobile: "9845999000", company: "Staypolis / Reddy Associates", city: "Bangalore", gstin: "29AABCR7890K5Z9", address: "Plot 88, Reddy Complex, Whitefield Main Road, Bangalore, Karnataka - 560066", status: "deactivated", lastPaidFY: null, paymentMeans: null, activationNote: `Pending Associate Renewal Dues for ${fy.label}` },
-            { id: "mem-006", name: "Rahul Varma", mobile: "9880011224", email: "rahul.v@varmarealty.com", category: "associate_member", parentMemberId: "mem-007", parentMemberName: "Sunita Sharma", parentMemberMobile: "9988776655", company: "Embassy Realty / Varma Realty", city: "Bangalore", gstin: "29AABCV9988P1Z2", address: "#44, Varma Towers, Koramangala 5th Block, Bangalore, Karnataka - 560095", status: "deactivated", lastPaidFY: fy.code, paymentMeans: "Online Gateway", activationNote: `Deactivated: Main Member (Sunita Sharma) has not paid ${fy.label} dues` },
-            { id: "mem-007", name: "Sunita Sharma", mobile: "9988776655", email: "sunita.sharma@embassyrealty.in", category: "member", company: "Embassy Square Realty", city: "Bangalore", gstin: "29AABCS1122M3Z4", address: "Level 2, Embassy Square, Infantry Road, Bangalore, Karnataka - 560001", status: "deactivated", lastPaidFY: null, paymentMeans: null, activationNote: `Pending ${fy.label} Annual Renewal` }
+            { id: "mem-001", name: "Ramesh Gupta", mobile: "9800000001", email: "ramesh.gupta@crea-realty.in", category: "member", company: "Apex Prime Realty", city: "Bangalore", gstin: "29AABCR1234F1Z5", reraNumber: "PRM/KA/RERA/1251/310/AG/171120/000101", address: "Suite 401, Prestige Meridian, MG Road, Bangalore, Karnataka - 560001", status: "active", lastPaidFY: fy.code, paymentMeans: "Online Gateway", activationNote: `Paid Online (Inv: CREA/${fy.code}/MEM/0001)` },
+            { id: "mem-002", name: "Sneha Patel", mobile: "9800000002", email: "sneha.p@lotushomes.co", category: "associate_member", parentMemberId: "mem-001", parentMemberName: "Ramesh Gupta", parentMemberMobile: "9800000001", company: "Apex Prime Realty / Lotus Homes", city: "Bangalore", gstin: "29AABCL5678G2Z1", reraNumber: "PRM/KA/RERA/1251/310/AG/180512/000215", address: "#12, Lotus Arcade, 100ft Road, Indiranagar, Bangalore, Karnataka - 560038", status: "active", lastPaidFY: fy.code, paymentMeans: "Online Gateway", activationNote: "Associate Fee Paid (Main Member Ramesh Gupta Active)" },
+            { id: "mem-003", name: "Vikramaditya Rao", mobile: "9800000003", email: "v.rao@deccanproperties.com", category: "member", company: "Deccan Realtors & Estates", city: "Bangalore", gstin: "29AABCD9012H3Z7", reraNumber: "PRM/KA/RERA/1251/310/AG/190823/000344", address: "Ground Floor, Deccan Chambers, Lavelle Road, Bangalore, Karnataka - 560001", status: "active", lastPaidFY: fy.code, paymentMeans: "Online Gateway", activationNote: `Paid Online (Inv: CREA/${fy.code}/MEM/0002)` },
+            { id: "mem-004", name: "Anand Murthy", mobile: "9845999000", email: "anand.m@staypolis.com", category: "member", company: "Staypolis Brokerage", city: "Bangalore", gstin: "29AABCS3456J4Z3", reraNumber: "PRM/KA/RERA/1251/310/AG/200115/000489", address: "Unit 3B, Brigade Gateway, Malleshwaram, Bangalore, Karnataka - 560055", status: "active", lastPaidFY: fy.code, paymentMeans: "Online Gateway", activationNote: `Renewed ${fy.label}` },
+            { id: "mem-005", name: "Kavita Reddy", mobile: "9711288901", email: "kavita.r@reddyrealty.in", category: "associate_member", parentMemberId: "mem-004", parentMemberName: "Anand Murthy", parentMemberMobile: "9845999000", company: "Staypolis / Reddy Associates", city: "Bangalore", gstin: "29AABCR7890K5Z9", reraNumber: "PRM/KA/RERA/1251/310/AG/210408/000572", address: "Plot 88, Reddy Complex, Whitefield Main Road, Bangalore, Karnataka - 560066", status: "deactivated", lastPaidFY: null, paymentMeans: null, activationNote: `Pending Associate Renewal Dues for ${fy.label}` },
+            { id: "mem-006", name: "Rahul Varma", mobile: "9880011224", email: "rahul.v@varmarealty.com", category: "associate_member", parentMemberId: "mem-007", parentMemberName: "Sunita Sharma", parentMemberMobile: "9988776655", company: "Embassy Realty / Varma Realty", city: "Bangalore", gstin: "29AABCV9988P1Z2", reraNumber: "PRM/KA/RERA/1251/310/AG/220919/000631", address: "#44, Varma Towers, Koramangala 5th Block, Bangalore, Karnataka - 560095", status: "deactivated", lastPaidFY: fy.code, paymentMeans: "Online Gateway", activationNote: `Deactivated: Main Member (Sunita Sharma) has not paid ${fy.label} dues` },
+            { id: "mem-007", name: "Sunita Sharma", mobile: "9988776655", email: "sunita.sharma@embassyrealty.in", category: "member", company: "Embassy Square Realty", city: "Bangalore", gstin: "29AABCS1122M3Z4", reraNumber: "PRM/KA/RERA/1251/310/AG/230214/000788", address: "Level 2, Embassy Square, Infantry Road, Bangalore, Karnataka - 560001", status: "deactivated", lastPaidFY: null, paymentMeans: null, activationNote: `Pending ${fy.label} Annual Renewal` }
           ],
           heads: [
             {
@@ -1053,7 +1106,8 @@
               venue: "CREA(I) Headquarters & All Chapters",
               activeUntil: `${fy.endYear || '2027'}-03-31T23:59:59`,
               status: "active",
-              prices: { associate_member: 5000, member: 10000, board_member: 8000, non_member: null },
+              giftEnabled: false,
+              prices: { associate_member: 5000, member: 10000, non_member: null },
               writeup: "The Confederation of Real Estate Associates (India) — CREA(I) is the premier self-regulatory association of professional real estate brokers, property managers, and valuation experts in South India.\n\nYour annual membership subscription entitles your firm to comprehensive professional standing, legal assistance on brokerage covenant disputes, and direct integration into the CREA Multi-Listing Exchange (MLE). Over the past twelve months, CREA(I) mediated over 140 commercial leasing transactions and spearheaded ethical commission standardization benchmarks across residential corridors.\n\nKey Member Privileges:\n1. Official CREA(I) Certified Realtor Certificate and verified digital credentials for client trust.\n2. Direct access to our monthly Legal & Notary clinic for RERA complaints, draft scrutiny, and deposit escrow guidance.\n3. Preferential registration rates on all accredited broker mastery certifications and quarterly state symposia.\n4. Comprehensive arbitration board access in the event of client or fellow broker commission evasion.\n5. Complimentary entry to the bi-annual Property Showcase networking breakfasts with tier-1 developers including Prestige, Sobha, and Brigade.\n\nMembers are requested to complete renewal promptly to prevent de-listing from the public verified realtor register."
             },
             {
@@ -1066,7 +1120,8 @@
               venue: "The Lalit Hotel, High Grounds, Bangalore",
               activeUntil: "2026-10-28T09:00:00",
               status: "active",
-              prices: { associate_member: 1200, member: 1200, board_member: 0, non_member: 2500 },
+              giftEnabled: false,
+              prices: { associate_member: 1200, member: 1200, non_member: 2500 },
               writeup: "RERA litigation and title verification scrutiny have transformed real estate transactions into rigorous legal engagements. This full-day intensive masterclass is curated specifically for practicing real estate brokers, leasing executives, and independent agents seeking to eliminate liability and elevate deal closings.\n\nLed by Senior Advocate & Real Estate Arbitrator Mr. Ajay Venkatesh along with seasoned land revenue experts, this masterclass delves into practical title search methodologies across Karnataka land records including RTC (Pahani), Encumbrance Certificates (Form 15 & 16), Katha extract nuances (e-Katha vs A-Katha vs B-Katha), and BDA/BMRDA layout approval checks.\n\nKey Highlights of the Syllabus:\n1. Identifying encumbrances, litigation flags, and revenue dispute caveats before listing properties.\n2. Formulating watertight rental and sale agreements that safeguard broker commissions against client circumvention.\n3. RERA Section 9 and 10 agent compliance mandates, annual filings, and advertising dos and don'ts.\n4. Managing client advance tokens and escrow protocol to safeguard earnest deposits.\n5. Interactive case studies on 5 high-profile land title defects resolved in Bangalore courts.\n\nIncludes accredited certification, comprehensive take-home legal draft toolkit on pendrive, gourmet lunch, and high-tea networking with senior legal professionals."
             },
             {
@@ -1079,7 +1134,8 @@
               venue: "Virtual Live Interactive Studio (Zoom HD)",
               activeUntil: "2026-11-18T13:30:00",
               status: "active",
-              prices: { associate_member: 800, member: 800, board_member: 0, non_member: 1800 },
+              giftEnabled: false,
+              prices: { associate_member: 800, member: 800, non_member: 1800 },
               writeup: "High-net-worth individuals and Non-Resident Indians (NRIs) represent over 38% of luxury real estate purchases and premium commercial leasing volume in metropolitan Bangalore. Reaching and qualifying these diaspora investors requires sophisticated digital acquisition funnels beyond conventional classifieds.\n\nThis intensive interactive webinar equips real estate professionals with automated lead generation systems, WhatsApp Business automation workflows, and high-converting performance marketing campaigns on Google Search and Meta Ads.\n\nWorkshop Outline:\n1. Setting up geo-targeted campaigns targeting NRI hubs in the UAE, United States, United Kingdom, and Singapore.\n2. Crafting video walkthrough presentations that convert remote NRI buyers without requiring physical property visits.\n3. Automated WhatsApp CRM workflows for immediate lead engagement within 90 seconds of portal inquiry.\n4. Navigating FEMA regulations, NRE/NRO bank accounts, repatriation covenants, and Power of Attorney (PoA) stamping.\n5. Live demonstration of AI tools for generating property inspection reports and personalized investor pitch decks.\n\nParticipants will receive ready-to-deploy ad copy templates, email sequences, and a recording valid for 12 months."
             },
             {
@@ -1092,19 +1148,19 @@
               venue: "Grand Ballroom, ITC Windsor, Golf Course Road, Bangalore",
               activeUntil: "2026-12-12T17:00:00",
               status: "active",
-              prices: { associate_member: 2800, member: 2800, board_member: 2000, non_member: 5000 },
+              giftEnabled: false,
+              prices: { associate_member: 2800, member: 2800, non_member: 5000 },
               writeup: "The Confederation of Real Estate Associates (India) cordially invites you to our flagship annual gathering — the CREA(I) Annual Realty Conclave & Networking Gala 2026. This landmark evening brings together over 400 distinguished real estate brokers, developers, legal luminaries, and government dignitaries under one roof.\n\nTheme for 2026: 'The Next Decade of Urban Mobility & PropTech Growth in Bangalore'.\n\nEvening Itinerary:\n- 06:00 PM - Registration & Welcome High Tea\n- 06:45 PM - Keynote Address by Hon'ble Minister for Housing & Urban Infrastructure\n- 07:30 PM - Panel Discussion: Infrastructure corridors (Metro Phase 3, PRR & STRR) shaping high-yield residential clusters\n- 08:30 PM - Presentation of the CREA(I) Excellence Awards recognizing top brokerages across South India\n- 09:15 PM - Cocktail Reception, Gala Dinner & Unveiling of the CREA Property Research Whitepaper 2027\n\nDress Code: Formal Western / Indian Traditional Formal.\nComplimentary valet parking available at the venue."
             }
           ],
           payments: [
             { id: "pay-101", invoiceNo: `CREA/${fy.code}/MEM/0001`, serial: 1, date: "2026-08-05T10:15:00.000Z", headId: "head-mem", headCode: "MEM", headTitle: `Annual CREA(I) Membership ${fy.fullLabel || '2026-2027'}`, payerType: "member", payerCategory: "member", payerId: "mem-001", payerName: "Ramesh Gupta", payerCompany: "Apex Prime Realty", payerMobile: "9800000001", payerEmail: "ramesh.gupta@crea-realty.in", payerGstin: "29AABCR1234F1Z5", payerAddress: "Suite 401, Prestige Meridian, MG Road, Bangalore", baseAmount: 10000, cgst: 900, sgst: 900, totalGst: 1800, totalAmount: 11800, status: "success", attended: false, attendedAt: null, giftCollected: false, giftCollectedAt: null },
-            { id: "pay-102", invoiceNo: `CREA/${fy.code}/MEM/0002`, serial: 2, date: "2026-08-07T14:20:00.000Z", headId: "head-mem", headCode: "MEM", headTitle: `Annual CREA(I) Membership ${fy.fullLabel || '2026-2027'}`, payerType: "member", payerCategory: "board_member", payerId: "mem-003", payerName: "Vikramaditya Rao", payerCompany: "Deccan Realtors & Estates", payerMobile: "9800000003", payerEmail: "v.rao@deccanproperties.com", payerGstin: "29AABCD9012H3Z7", payerAddress: "Ground Floor, Deccan Chambers, Lavelle Road, Bangalore", baseAmount: 8000, cgst: 720, sgst: 720, totalGst: 1440, totalAmount: 9440, status: "success", attended: false, attendedAt: null, giftCollected: false, giftCollectedAt: null },
+            { id: "pay-102", invoiceNo: `CREA/${fy.code}/MEM/0002`, serial: 2, date: "2026-08-07T14:20:00.000Z", headId: "head-mem", headCode: "MEM", headTitle: `Annual CREA(I) Membership ${fy.fullLabel || '2026-2027'}`, payerType: "member", payerCategory: "member", payerId: "mem-003", payerName: "Vikramaditya Rao", payerCompany: "Deccan Realtors & Estates", payerMobile: "9800000003", payerEmail: "v.rao@deccanproperties.com", payerGstin: "29AABCD9012H3Z7", payerAddress: "Ground Floor, Deccan Chambers, Lavelle Road, Bangalore", baseAmount: 10000, cgst: 900, sgst: 900, totalGst: 1800, totalAmount: 11800, status: "success", attended: false, attendedAt: null, giftCollected: false, giftCollectedAt: null },
             { id: "pay-103", invoiceNo: `CREA/${fy.code}/MEM/0003`, serial: 3, date: "2026-08-14T11:05:00.000Z", headId: "head-mem", headCode: "MEM", headTitle: `Annual CREA(I) Membership ${fy.fullLabel || '2026-2027'}`, payerType: "member", payerCategory: "associate_member", payerId: "mem-002", payerName: "Sneha Patel", payerCompany: "Lotus Property Consultants", payerMobile: "9800000002", payerEmail: "sneha.p@lotushomes.co", payerGstin: "29AABCL5678G2Z1", payerAddress: "#12, Lotus Arcade, 100ft Road, Indiranagar, Bangalore", baseAmount: 5000, cgst: 450, sgst: 450, totalGst: 900, totalAmount: 5900, status: "success", attended: false, attendedAt: null, giftCollected: false, giftCollectedAt: null },
             { id: "pay-104", invoiceNo: `CREA/${fy.code}/TRN1/0004`, serial: 4, date: "2026-08-20T09:40:00.000Z", headId: "head-trn1", headCode: "TRN1", headTitle: "Masterclass: RERA Compliance, Title Verification & Escrows", payerType: "member", payerCategory: "member", payerId: "mem-001", payerName: "Ramesh Gupta", payerCompany: "Apex Prime Realty", payerMobile: "9800000001", payerEmail: "ramesh.gupta@crea-realty.in", payerGstin: "29AABCR1234F1Z5", payerAddress: "Suite 401, Prestige Meridian, MG Road, Bangalore", baseAmount: 1200, cgst: 108, sgst: 108, totalGst: 216, totalAmount: 1416, status: "success", attended: true, attendedAt: "2026-10-28T09:55:00.000Z", giftCollected: true, giftCollectedAt: "2026-10-28T10:15:00.000Z" },
             { id: "pay-105", invoiceNo: `CREA/${fy.code}/TRN1/0005`, serial: 5, date: "2026-08-22T16:15:00.000Z", headId: "head-trn1", headCode: "TRN1", headTitle: "Masterclass: RERA Compliance, Title Verification & Escrows", payerType: "non_member", payerCategory: "non_member", payerId: null, payerName: "Siddharth Joshi", payerCompany: "Urban Estates", payerMobile: "9845112233", payerEmail: "sid.joshi@urbanestates.in", payerGstin: "29AAACJ1122K1Z9", payerAddress: "Urban Estates, 4th Block, Koramangala, Bangalore", baseAmount: 2500, cgst: 225, sgst: 225, totalGst: 450, totalAmount: 2950, status: "success", attended: true, attendedAt: "2026-10-28T10:02:00.000Z", giftCollected: false, giftCollectedAt: null },
             { id: "pay-106", invoiceNo: `CREA/${fy.code}/MEM/0006`, serial: 6, date: "2026-09-01T10:00:00.000Z", headId: "head-mem", headCode: "MEM", headTitle: `Annual CREA(I) Membership ${fy.fullLabel || '2026-2027'}`, payerType: "member", payerCategory: "member", payerId: "mem-004", payerName: "Anand Murthy", payerCompany: "Staypolis Brokerage", payerMobile: "9845999000", payerEmail: "anand.m@staypolis.com", payerGstin: "29AABCS3456J4Z3", payerAddress: "Unit 3B, Brigade Gateway, Malleshwaram, Bangalore", baseAmount: 10000, cgst: 900, sgst: 900, totalGst: 1800, totalAmount: 11800, status: "success", attended: false, attendedAt: null, giftCollected: false, giftCollectedAt: null },
             { id: "pay-107", invoiceNo: `CREA/${fy.code}/TRN1/0007`, serial: 7, date: "2026-09-04T12:30:00.000Z", headId: "head-trn1", headCode: "TRN1", headTitle: "Masterclass: RERA Compliance, Title Verification & Escrows", payerType: "member", payerCategory: "associate_member", payerId: "mem-002", payerName: "Sneha Patel", payerCompany: "Lotus Property Consultants", payerMobile: "9800000002", payerEmail: "sneha.p@lotushomes.co", payerGstin: "29AABCL5678G2Z1", payerAddress: "#12, Lotus Arcade, 100ft Road, Indiranagar, Bangalore", baseAmount: 1200, cgst: 108, sgst: 108, totalGst: 216, totalAmount: 1416, status: "success", attended: false, attendedAt: null, giftCollected: false, giftCollectedAt: null },
-            { id: "pay-108", invoiceNo: `CREA/${fy.code}/TRN1/0008`, serial: 8, date: "2026-09-06T15:45:00.000Z", headId: "head-trn1", headCode: "TRN1", headTitle: "Masterclass: RERA Compliance, Title Verification & Escrows", payerType: "non_member", payerCategory: "non_member", payerId: null, payerName: "Deepak Mehra", payerCompany: "Mehra Properties", payerMobile: "9820011223", payerEmail: "deepak@mehraproperty.com", payerGstin: "", payerAddress: "Mehra Properties, Indiranagar, Bangalore", baseAmount: 2500, cgst: 225, sgst: 225, totalGst: 450, totalAmount: 2950, status: "success", attended: false, attendedAt: null, giftCollected: false, giftCollectedAt: null }
           ],
           emailLogs: [
             { id: "log-1", timestamp: "2026-08-05T10:15:02.000Z", recipient: "ramesh.gupta@crea-realty.in", recipientName: "Ramesh Gupta", subject: `CREA(I) Tax Invoice CREA/${fy.code}/MEM/0001 - Annual Membership`, invoiceNo: `CREA/${fy.code}/MEM/0001`, amount: 11800, status: "Dispatched (Simulated SMTP)" }
@@ -1145,12 +1201,12 @@
                   <div style="display: flex; flex-direction: column; gap: 6px;">
                     ${(() => {
                       const demoMobiles = [
-                        { m: '9800000001', label: 'Ramesh Gupta', role: 'Regular Member', badge: 'badge-member' },
+                        { m: '9800000001', label: 'Ramesh Gupta', role: 'Primary Member', badge: 'badge-member' },
                         { m: '9800000002', label: 'Sneha Patel', role: 'Associate Member', extra: 'Main: Ramesh', badge: 'badge-associate_member' },
-                        { m: '9800000003', label: 'Vikramaditya Rao', role: 'Board Member', badge: 'badge-board_member' },
+                        { m: '9800000003', label: 'Vikramaditya Rao', role: 'Primary Member', badge: 'badge-member' },
                         { m: '9711288901', label: 'Kavita Reddy', role: 'Associate Member', extra: 'Main: Anand', badge: 'badge-associate_member' },
                         { m: '9880011224', label: 'Rahul Varma', role: 'Associate Member', extra: 'Main: Sunita', badge: 'badge-associate_member' },
-                        { m: '9988776655', label: 'Sunita Sharma', role: 'Regular Member', badge: 'badge-member' }
+                        { m: '9988776655', label: 'Sunita Sharma', role: 'Primary Member', badge: 'badge-member' }
                       ];
                       return demoMobiles.map(item => {
                         const mem = (this.data.members || []).find(x => x.mobile === item.m);
@@ -1295,7 +1351,7 @@
               <div>
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                   <h2 style="font-size: 20px; font-weight: 700;">${member.name}</h2>
-                  <span class="badge badge-${member.category}">${member.category.replace('_', ' ')}</span>
+                  <span class="badge badge-${member.category}">${member.category === 'member' ? 'Primary Member' : member.category.replace('_', ' ')}</span>
                   ${(isMemPaid && member.status === 'active') ? `
                     <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.5);">● ACTIVE & PAID (${fy.label})</span>
                   ` : `
@@ -1303,7 +1359,7 @@
                   `}
                 </div>
                 <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
-                  🏢 ${member.company || 'CREA Associate'} • 📞 +91 ${member.mobile} • ✉️ ${member.email}
+                  🏢 ${member.company || 'CREA Associate'} • 📞 +91 ${member.mobile} • ✉️ ${member.email}${member.reraNumber ? ` • <span style="color: #c084fc; font-weight: 600;">📋 RERA: ${member.reraNumber}</span>` : ''}
                   ${member.activationNote ? ` • <span style="color: #38bdf8;">${member.activationNote}</span>` : ''}
                 </div>
               </div>
@@ -2240,7 +2296,6 @@
 
                       const pAssoc = (h.prices?.associate_member ?? h.prices?.new_member) != null ? `₹${Number(h.prices.associate_member ?? h.prices.new_member).toLocaleString('en-IN')}` : '-';
                       const pMem = h.prices?.member != null ? `₹${Number(h.prices.member).toLocaleString('en-IN')}` : '-';
-                      const pBrd = h.prices?.board_member != null ? `₹${Number(h.prices.board_member).toLocaleString('en-IN')}` : '-';
                       const pGst = h.prices?.non_member != null ? `₹${Number(h.prices.non_member).toLocaleString('en-IN')}` : '<span style="color: var(--text-dim);">Restricted</span>';
 
                       return `
@@ -2249,7 +2304,7 @@
                             <div>
                               <strong style="color: ${isDeleted ? '#94a3b8' : isDeactivated ? '#cbd5e1' : '#ffffff'}; font-size: 13.5px;">${h.title}</strong>
                               <div style="font-size: 11px; color: #38bdf8; margin-top: 3px;">
-                                Code: <strong>${h.code}</strong> • Event: ${h.eventDate || 'N/A'}${isLive ? ' <span class="badge" style="background: rgba(239, 68, 68, 0.25); color: #f87171; border: 1.5px solid #ef4444; font-size: 10px; padding: 1px 6px; font-weight: 700;">🔴 LIVE NOW</span>' : isToday ? ' <span class="badge" style="background: rgba(16, 185, 129, 0.25); color: #34d399; border: 1px solid #10b981; font-size: 10px; padding: 1px 6px;">● TODAY</span>' : ''} • Closes: ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                Code: <strong>${h.code}</strong> • Event: ${h.eventDate || 'N/A'}${isLive ? ' <span class="badge" style="background: rgba(239, 68, 68, 0.25); color: #f87171; border: 1.5px solid #ef4444; font-size: 10px; padding: 1px 6px; font-weight: 700;">🔴 LIVE NOW</span>' : isToday ? ' <span class="badge" style="background: rgba(16, 185, 129, 0.25); color: #34d399; border: 1px solid #10b981; font-size: 10px; padding: 1px 6px;">● TODAY</span>' : ''} ${h.type !== 'membership' ? (h.giftEnabled ? '<span class="badge" style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid #9333ea; font-size: 10px; padding: 1px 6px; font-weight: 600;">🎁 Gifts Approved</span>' : '<span class="badge" style="background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); font-size: 10px; padding: 1px 6px;">🚫 Gifts Disabled</span>') : ''} • Closes: ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                               </div>
                             </div>
                           </td>
@@ -2282,8 +2337,7 @@
                           </td>
                           <td style="font-size: 11.5px; line-height: 1.5;">
                             <div><span style="color: var(--text-dim);">Assoc Mem:</span> <strong style="color: #fbbf24;">${pAssoc}</strong></div>
-                            <div><span style="color: var(--text-dim);">Reg Mem:</span> <strong style="color: #38bdf8;">${pMem}</strong></div>
-                            <div><span style="color: var(--text-dim);">Board:</span> <strong style="color: #c084fc;">${pBrd}</strong></div>
+                            <div><span style="color: var(--text-dim);">Primary Mem:</span> <strong style="color: #38bdf8;">${pMem}</strong></div>
                             <div><span style="color: var(--text-dim);">Guest:</span> <strong>${pGst}</strong></div>
                           </td>
                           <td>
@@ -2324,11 +2378,14 @@
                                 <button onclick="app.toggleHeadLive('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; ${isLive ? 'background: rgba(239, 68, 68, 0.2); color: #f87171; border-color: #ef4444; font-weight: 700;' : 'color: #34d399; border-color: rgba(16, 185, 129, 0.4);'}" title="${isLive ? 'Live Mode is currently ON in database. Click to end live check-in mode.' : 'Click to turn ON Live Event Mode in database immediately across all devices.'}">
                                   ${isLive ? '⏹ End Live' : '🔴 Go Live'}
                                 </button>
+                                <button onclick="app.toggleHeadGift('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; ${h.giftEnabled ? 'background: rgba(168, 85, 247, 0.2); color: #c084fc; border-color: #9333ea; font-weight: 700;' : 'color: #94a3b8; border-color: rgba(148, 163, 184, 0.4);'}" title="${h.giftEnabled ? 'Gifts are currently APPROVED. Click to disable takeaway kit / gift distribution.' : 'Click to APPROVE takeaway kit / gift distribution for this event.'}">
+                                  ${h.giftEnabled ? '🎁 Gifts Approved' : '🚫 Enable Gifts'}
+                                </button>
                                 <button onclick="app.openScannerModal('${h.id}', 'attendance')" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11.5px; background: #0284c7; border-color: #0369a1;" title="${isLive ? 'Live Event Active: Open camera scanner to record gate attendance' : 'Gate attendance check-in unlocks on event day: ' + (h.eventDate || 'N/A') + ' or via Live toggle'}">
                                   📷 Attendance${isLive ? ' (Live)' : ''}
                                 </button>
-                                <button onclick="app.openScannerModal('${h.id}', 'gift')" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11.5px; background: #d97706; border-color: #b45309;" title="${isLive ? 'Live Event Active: Open camera scanner to verify delegate kit handover' : 'Gift collection unlocks on event day: ' + (h.eventDate || 'N/A') + ' or via Live toggle'}">
-                                  🎁 Gift Kiosk${isLive ? ' (Live)' : ''}
+                                <button onclick="${h.giftEnabled ? `app.openScannerModal('${h.id}', 'gift')` : `alert('Takeaway kit / Gift distribution is currently disabled by Admin for &quot;${h.title.replace(/"/g, '&quot;')}&quot;. Click &quot;Enable Gifts&quot; first to activate.')`}" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11.5px; ${h.giftEnabled ? 'background: #d97706; border-color: #b45309;' : 'background: #334155; border-color: #475569; opacity: 0.65;'}" title="${h.giftEnabled ? (isLive ? 'Live Event Active: Open camera scanner to verify delegate kit handover' : 'Gift collection unlocks on event day or via Live toggle') : 'Gift distribution is currently disabled by Admin'}">
+                                  🎁 Gift Kiosk${h.giftEnabled ? (isLive ? ' (Live)' : '') : ' (Disabled)'}
                                 </button>
                                 <button onclick="app.openDelegateTracker('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; border-color: rgba(56, 189, 248, 0.35); color: #38bdf8;" title="View delegates roster, mark check-ins and export list">
                                   📊 Roster (${hPays.length})
@@ -3530,29 +3587,41 @@ ${head.writeup || 'No detailed write-up provided.'}
                       </div>
                     </div>
 
-                    <!-- QR 2: Delegate Gift Kit -->
-                    <div style="text-align: center; padding-left: 10px;">
-                      <div style="font-size: 11px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
-                        🎁 2. Welcome Gift / Delegate Kit
+                    <!-- QR 2: Delegate Gift Kit (if approved by Admin) -->
+                    ${Boolean(head && head.giftEnabled) ? `
+                      <div style="text-align: center; padding-left: 10px;">
+                        <div style="font-size: 11px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">
+                          🎁 2. Welcome Gift / Delegate Kit
+                        </div>
+                        <div style="display: inline-block; padding: 6px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                          ${giftQR}
+                        </div>
+                        <div style="font-size: 10.5px; color: #475569; margin-top: 4px;">
+                          Scan at kit counter for complimentary gift
+                        </div>
+                        <div style="margin-top: 4px;">
+                          ${payment.giftCollected ? `
+                            <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #fef3c7; color: #b45309; border: 1px solid #fde68a; border-radius: 4px; padding: 2px 6px;">
+                              ✓ Gift Claimed (${new Date(payment.giftCollectedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })})
+                            </span>
+                          ` : `
+                            <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #fef3c7; color: #b45309; border: 1px solid #fde68a; border-radius: 4px; padding: 2px 6px;">
+                              ● 1 Delegate Kit Redeemable
+                            </span>
+                          `}
+                        </div>
                       </div>
-                      <div style="display: inline-block; padding: 6px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
-                        ${giftQR}
+                    ` : `
+                      <div style="text-align: center; padding-left: 10px; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 120px; background: #f8fafc; border-radius: 6px; border: 1px dashed #cbd5e1; padding: 10px;">
+                        <div style="font-size: 22px; margin-bottom: 4px;">🎁</div>
+                        <div style="font-size: 10.5px; font-weight: 700; color: #64748b; text-transform: uppercase;">
+                          Takeaway Kit / Gift
+                        </div>
+                        <div style="font-size: 10px; color: #94a3b8; margin-top: 3px; max-width: 160px; line-height: 1.3;">
+                          Takeaway kit / Gift distribution is not active for this program.
+                        </div>
                       </div>
-                      <div style="font-size: 10.5px; color: #475569; margin-top: 4px;">
-                        Scan at kit counter for complimentary gift
-                      </div>
-                      <div style="margin-top: 4px;">
-                        ${payment.giftCollected ? `
-                          <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #fef3c7; color: #b45309; border: 1px solid #fde68a; border-radius: 4px; padding: 2px 6px;">
-                            ✓ Gift Claimed (${new Date(payment.giftCollectedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })})
-                          </span>
-                        ` : `
-                          <span style="display: inline-block; font-size: 10px; font-weight: 700; background: #fef3c7; color: #b45309; border: 1px solid #fde68a; border-radius: 4px; padding: 2px 6px;">
-                            ● 1 Delegate Kit Redeemable
-                          </span>
-                        `}
-                      </div>
-                    </div>
+                    `}
                   </div>
                 ` : `
                   <!-- For Annual Membership: Official Accredited Standing Badge (No gate pass / gift kit logic) -->
@@ -3783,14 +3852,21 @@ ${head.writeup || 'No detailed write-up provided.'}
                 </div>
 
                 <!-- Recipient Line: Name & Firm -->
-                <div style="display: flex; justify-content: center; align-items: baseline; gap: 10px; margin-bottom: 18px; position: relative; z-index: 2; border-bottom: 1.5px solid #c9a44e; padding-bottom: 6px; max-width: 660px; margin-left: auto; margin-right: auto;">
-                  <span style="font-size: 14px; color: #78716c; font-style: italic;">Mr / Ms / M/s</span>
-                  <span style="font-size: 28px; font-weight: 700; color: #0f172a; font-family: Georgia, 'Times New Roman', serif; font-style: italic; letter-spacing: 0.5px; padding: 0 10px;">
-                    ${memberName}
-                  </span>
-                  <span style="font-size: 15px; font-weight: 700; color: #1e293b; font-family: Georgia, serif;">
-                    (${firmFormatted})
-                  </span>
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 18px; position: relative; z-index: 2; border-bottom: 1.5px solid #c9a44e; padding-bottom: 6px; max-width: 660px; margin-left: auto; margin-right: auto;">
+                  <div style="display: flex; justify-content: center; align-items: baseline; gap: 10px; flex-wrap: wrap;">
+                    <span style="font-size: 14px; color: #78716c; font-style: italic;">Mr / Ms / M/s</span>
+                    <span style="font-size: 28px; font-weight: 700; color: #0f172a; font-family: Georgia, 'Times New Roman', serif; font-style: italic; letter-spacing: 0.5px; padding: 0 10px;">
+                      ${memberName}
+                    </span>
+                    <span style="font-size: 15px; font-weight: 700; color: #1e293b; font-family: Georgia, serif;">
+                      (${firmFormatted})
+                    </span>
+                  </div>
+                  ${(member && member.reraNumber) ? `
+                    <div style="font-size: 11px; color: #78716c; font-family: Arial, sans-serif; font-weight: 600; margin-top: 3px; letter-spacing: 0.5px;">
+                      RERA REGISTRATION NO: <span style="color: #0f172a;">${member.reraNumber}</span>
+                    </div>
+                  ` : ''}
                 </div>
 
                 <!-- Body Declaration Text -->
@@ -3990,26 +4066,33 @@ ${head.writeup || 'No detailed write-up provided.'}
                   <div style="font-size: 12px; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 10px;">
                     Discriminatory Base Prices (excl. 18% GST)
                   </div>
-                  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+                  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
                     <div>
                       <label class="form-label" style="font-size: 11px;">Associate Member (₹)</label>
                       <input type="number" id="price-associate_member" placeholder="1000" class="form-input">
                     </div>
                     <div>
-                      <label class="form-label" style="font-size: 11px;">Member (₹)</label>
+                      <label class="form-label" style="font-size: 11px;">Primary Member (₹)</label>
                       <input type="number" id="price-member" placeholder="1200" class="form-input">
                     </div>
                     <div>
-                      <label class="form-label" style="font-size: 11px;">Board Member (₹)</label>
-                      <input type="number" id="price-board_member" placeholder="0" class="form-input">
-                    </div>
-                    <div>
-                      <label class="form-label" style="font-size: 11px;">Non-Member (₹)</label>
+                      <label class="form-label" style="font-size: 11px;">Guest / Non-Member (₹)</label>
                       <input type="number" id="price-non_member" placeholder="2500" class="form-input" title="Leave blank if not open to non-members">
                     </div>
                   </div>
                   <div style="font-size: 11px; color: var(--text-dim); margin-top: 6px;">
                     * Leave Non-Member blank if the program is exclusively restricted to verified CREA members.
+                  </div>
+                </div>
+
+                <!-- Takeaway Kit / Gift Approval -->
+                <div class="form-group" style="background: #090f1d; border: 1px solid var(--card-border); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px;">
+                  <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13px; font-weight: 600; color: #c084fc;">
+                    <input type="checkbox" id="new-head-gift-enabled" style="accent-color: #9333ea; width: 18px; height: 18px; cursor: pointer;">
+                    <span>🎁 Approve Takeaway Kit / Gift Distribution for this Program</span>
+                  </label>
+                  <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px; margin-left: 28px;">
+                    When enabled, attendees can scan and claim their complimentary delegate kits at the venue gift counter.
                   </div>
                 </div>
 
@@ -4087,11 +4170,11 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
 
         const memPriceVal = document.getElementById("price-member").value;
         const assocPriceVal = document.getElementById("price-associate_member")?.value || document.getElementById("price-new_member")?.value || (type !== 'membership' && code !== 'MEM' ? memPriceVal : null);
+        const giftEnabled = Boolean(document.getElementById("new-head-gift-enabled")?.checked);
         const prices = {
           associate_member: assocPriceVal ? Number(assocPriceVal) : null,
           new_member: assocPriceVal ? Number(assocPriceVal) : null,
           member: memPriceVal ? Number(memPriceVal) : null,
-          board_member: document.getElementById("price-board_member").value ? Number(document.getElementById("price-board_member").value) : null,
           non_member: document.getElementById("price-non_member").value ? Number(document.getElementById("price-non_member").value) : null
         };
 
@@ -4106,6 +4189,7 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
           venue,
           activeUntil,
           status: "active",
+          giftEnabled,
           prices,
           writeup
         };
@@ -4154,7 +4238,6 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
         const isDeactivated = head.status === "deactivated" || head.status === "inactive";
         const newMemPrice = head.prices?.associate_member ?? head.prices?.new_member ?? "";
         const memPrice = head.prices?.member ?? "";
-        const boardPrice = head.prices?.board_member ?? "";
         const nonMemPrice = head.prices?.non_member ?? "";
 
         document.getElementById("modal-root").innerHTML = `
@@ -4281,6 +4364,22 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
                       <input type="checkbox" id="edit-head-is-live" ${head.isLive ? 'checked' : ''} style="width: 22px; height: 22px; accent-color: #ef4444; cursor: pointer;">
                     </label>
                   </div>
+
+                  <!-- Takeaway Kit / Gift Approval Toggle -->
+                  <div style="background: rgba(15, 23, 42, 0.7); border: 1.5px solid ${head.giftEnabled ? '#9333ea' : 'rgba(148, 163, 184, 0.3)'}; border-radius: 8px; padding: 12px; margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                    <div>
+                      <div style="font-size: 13px; font-weight: 700; color: ${head.giftEnabled ? '#c084fc' : '#ffffff'}; display: flex; align-items: center; gap: 6px;">
+                        <span>${head.giftEnabled ? '🎁' : '🚫'}</span> <span>Delegate Kit & Welcome Gift Approval</span>
+                        <span class="badge" style="${head.giftEnabled ? 'background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid #9333ea;' : 'background: rgba(148, 163, 184, 0.15); color: #94a3b8;'}">${head.giftEnabled ? 'APPROVED & ACTIVE' : 'DISABLED'}</span>
+                      </div>
+                      <div style="font-size: 11.5px; color: var(--text-dim); margin-top: 3px;">
+                        When checked, attendees can redeem takeaway kits and gifts at the gift counter. When unchecked, gift redemption is blocked.
+                      </div>
+                    </div>
+                    <label style="position: relative; display: inline-flex; align-items: center; cursor: pointer;">
+                      <input type="checkbox" id="edit-head-gift-enabled" ${head.giftEnabled ? 'checked' : ''} style="width: 22px; height: 22px; accent-color: #9333ea; cursor: pointer;">
+                    </label>
+                  </div>
                   <div id="date-extension-feedback" style="font-size: 11.5px; color: #34d399; margin-top: 8px; display: none;"></div>
                 </div>
 
@@ -4305,7 +4404,7 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
                     </div>
                   </div>
 
-                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px;">
                     <!-- Associate Member -->
                     <div style="background: #0f172a; border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 10px;">
                       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
@@ -4319,10 +4418,10 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
                       <div id="preview-associate_member" style="font-size: 10.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.4;"></div>
                     </div>
 
-                    <!-- Regular Member -->
+                    <!-- Primary Member -->
                     <div style="background: #0f172a; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 10px;">
                       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label class="form-label" style="font-size: 11px; margin-bottom: 0; color: #38bdf8;">Regular Member</label>
+                        <label class="form-label" style="font-size: 11px; margin-bottom: 0; color: #38bdf8;">Primary Member</label>
                         <div style="display: flex; gap: 2px;">
                           <button type="button" onclick="app.adjustEditPrice('member', -100)" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" title="Decrease ₹100">-</button>
                           <button type="button" onclick="app.adjustEditPrice('member', 100)" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" title="Increase ₹100">+</button>
@@ -4330,19 +4429,6 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
                       </div>
                       <input type="number" id="edit-price-member" value="${memPrice}" placeholder="1200" oninput="app.updateEditPriceGST('member')" class="form-input" style="padding: 6px 8px; font-size: 13px; font-weight: 700;">
                       <div id="preview-member" style="font-size: 10.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.4;"></div>
-                    </div>
-
-                    <!-- Board Member -->
-                    <div style="background: #0f172a; border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 8px; padding: 10px;">
-                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <label class="form-label" style="font-size: 11px; margin-bottom: 0; color: #c084fc;">Board Member</label>
-                        <div style="display: flex; gap: 2px;">
-                          <button type="button" onclick="app.adjustEditPrice('board_member', -100)" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" title="Decrease ₹100">-</button>
-                          <button type="button" onclick="app.adjustEditPrice('board_member', 100)" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 11px;" title="Increase ₹100">+</button>
-                        </div>
-                      </div>
-                      <input type="number" id="edit-price-board_member" value="${boardPrice}" placeholder="0" oninput="app.updateEditPriceGST('board_member')" class="form-input" style="padding: 6px 8px; font-size: 13px; font-weight: 700;">
-                      <div id="preview-board_member" style="font-size: 10.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.4;"></div>
                     </div>
 
                     <!-- Non-Member (Guest) -->
@@ -4400,7 +4486,7 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
         `;
 
         // Run live GST previews for all initial tier values
-        ['associate_member', 'new_member', 'member', 'board_member', 'non_member'].forEach(tier => {
+        ['associate_member', 'new_member', 'member', 'non_member'].forEach(tier => {
           app.updateEditPriceGST(tier);
         });
       },
@@ -4468,7 +4554,7 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
       },
 
       adjustAllEditPrices(delta) {
-        ['associate_member', 'new_member', 'member', 'board_member', 'non_member'].forEach(tier => {
+        ['associate_member', 'new_member', 'member', 'non_member'].forEach(tier => {
           const input = document.getElementById(`edit-price-${tier}`);
           if (input && input.value !== "") {
             let current = Number(input.value || 0);
@@ -4556,6 +4642,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         const venue = document.getElementById("edit-head-venue").value.trim();
         const writeup = document.getElementById("edit-head-writeup").value.trim();
         const isLive = document.getElementById("edit-head-is-live")?.checked ?? head.isLive ?? false;
+        const giftEnabled = document.getElementById("edit-head-gift-enabled")?.checked ?? head.giftEnabled ?? false;
 
         const parsePrice = (id) => {
           const el = document.getElementById(id);
@@ -4570,7 +4657,6 @@ Participants receive official CREA(I) accreditation credits, certified study mat
           associate_member: assocVal,
           new_member: assocVal,
           member: memVal,
-          board_member: parsePrice("edit-price-board_member"),
           non_member: parsePrice("edit-price-non_member")
         };
 
@@ -4587,7 +4673,11 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         head.prices = prices;
         head.writeup = writeup;
         head.isLive = isLive;
-        if (head.prices) head.prices.is_live = isLive;
+        head.giftEnabled = giftEnabled;
+        if (head.prices) {
+          head.prices.is_live = isLive;
+          head.prices.gift_enabled = giftEnabled;
+        }
 
         this.saveToStorage();
 
@@ -4604,6 +4694,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
               status,
               priority,
               isLive,
+              giftEnabled,
               eventDate,
               eventTime: head.eventTime,
               activeUntil,
@@ -4717,9 +4808,8 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                   <div>
                     <label class="form-label" style="font-size: 11px;">Category</label>
                     <select id="add-mem-cat" class="form-select" style="padding: 7px 10px; font-size: 12px;" onchange="document.getElementById('add-mem-parent-wrap').style.display = this.value === 'associate_member' ? 'block' : 'none'">
-                      <option value="member">Regular Member</option>
+                      <option value="member">Primary Member</option>
                       <option value="associate_member">Associate Member</option>
-                      <option value="board_member">Board Member</option>
                     </select>
                   </div>
                 </div>
@@ -4730,7 +4820,11 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                     ${primaryMembers.map(pm => `<option value="${pm.id}">${pm.name} (${pm.mobile}) - ${pm.company || 'Brokerage'}</option>`).join('')}
                   </select>
                 </div>
-                <div style="display: grid; grid-template-columns: 1.5fr 3fr auto; gap: 8px; align-items: flex-end;">
+                <div style="display: grid; grid-template-columns: 1.2fr 1.3fr 2.4fr auto; gap: 8px; align-items: flex-end;">
+                  <div>
+                    <label class="form-label" style="font-size: 11px; margin-bottom: 3px; color: #a78bfa;">RERA No. (Optional)</label>
+                    <input type="text" id="add-mem-rera" placeholder="PRM/KA/RERA/..." class="form-input" style="padding: 7px 10px; font-size: 12px; text-transform: uppercase; border-color: rgba(167, 139, 250, 0.4);">
+                  </div>
                   <div>
                     <label class="form-label" style="font-size: 11px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
                       <span>Member GSTIN (Optional)</span>
@@ -4776,10 +4870,11 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                         <td>
                           <div>${m.mobile}</div>
                           ${m.gstin ? `<div style="font-size: 10.5px; color: #38bdf8; font-family: monospace;">GST: ${m.gstin}</div>` : '<div style="font-size: 10.5px; color: var(--text-dim);">No GSTIN</div>'}
+                          ${m.reraNumber ? `<div style="font-size: 10px; color: #a78bfa; font-family: monospace;">📋 RERA: ${m.reraNumber}</div>` : ''}
                           <div style="font-size: 11px; color: var(--text-muted);">${m.email}</div>
                         </td>
                         <td>
-                          <div><span class="badge badge-${m.category}">${m.category.replace('_', ' ')}</span></div>
+                          <div><span class="badge badge-${m.category}">${m.category === 'member' ? 'Primary Member' : m.category.replace('_', ' ')}</span></div>
                           ${m.category === 'associate_member' ? `
                             <div style="font-size: 11px; color: #f59e0b; margin-top: 3px;">
                               🔗 Linked: <strong>${m.parentMemberName || 'Main Member'}</strong>
@@ -4876,9 +4971,8 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                   <div>
                     <label class="form-label" style="font-size: 11.5px;">Member Category</label>
                     <select id="edit-mem-cat" class="form-select" onchange="document.getElementById('edit-mem-parent-wrap').style.display = this.value === 'associate_member' ? 'block' : 'none'">
-                      <option value="member" ${m.category === 'member' ? 'selected' : ''}>Regular Member</option>
+                      <option value="member" ${m.category === 'member' ? 'selected' : ''}>Primary Member</option>
                       <option value="associate_member" ${m.category === 'associate_member' ? 'selected' : ''}>Associate Member</option>
-                      <option value="board_member" ${m.category === 'board_member' ? 'selected' : ''}>Board Member</option>
                     </select>
                   </div>
                   <div>
@@ -4898,14 +4992,20 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                   </select>
                 </div>
 
-                <div style="margin-bottom: 12px;">
-                  <label class="form-label" style="font-size: 11.5px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
-                    <span>Member GSTIN (Optional)</span>
-                    <span id="edit-mem-gstin-status" style="font-size: 10.5px; font-weight: 500;"></span>
-                  </label>
-                  <div style="position: relative;">
-                    <input type="text" id="edit-mem-gstin" value="${this.escapeHtml(m.gstin || '')}" placeholder="29AAAAA0000A1Z5" maxlength="15" class="form-input" style="padding-right: 75px; text-transform: uppercase;" oninput="app.onGstInput(this.value, 'edit')">
-                    <button type="button" onclick="app.fetchAndFillGst('edit')" class="btn btn-sm" style="position: absolute; right: 4px; top: 4px; height: 28px; padding: 0 8px; font-size: 11px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; border-radius: 4px;" title="Auto-fetch Firm Name & Address from GSTIN">🔍 Fetch</button>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                  <div>
+                    <label class="form-label" style="font-size: 11.5px; color: #a78bfa;">RERA Registration No. (Optional)</label>
+                    <input type="text" id="edit-mem-rera" value="${this.escapeHtml(m.reraNumber || '')}" placeholder="e.g. PRM/KA/RERA/1251/..." class="form-input" style="border-color: rgba(167, 139, 250, 0.4); text-transform: uppercase;">
+                  </div>
+                  <div>
+                    <label class="form-label" style="font-size: 11.5px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+                      <span>Member GSTIN (Optional)</span>
+                      <span id="edit-mem-gstin-status" style="font-size: 10.5px; font-weight: 500;"></span>
+                    </label>
+                    <div style="position: relative;">
+                      <input type="text" id="edit-mem-gstin" value="${this.escapeHtml(m.gstin || '')}" placeholder="29AAAAA0000A1Z5" maxlength="15" class="form-input" style="padding-right: 75px; text-transform: uppercase;" oninput="app.onGstInput(this.value, 'edit')">
+                      <button type="button" onclick="app.fetchAndFillGst('edit')" class="btn btn-sm" style="position: absolute; right: 4px; top: 4px; height: 28px; padding: 0 8px; font-size: 11px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; border-radius: 4px;" title="Auto-fetch Firm Name & Address from GSTIN">🔍 Fetch</button>
+                    </div>
                   </div>
                 </div>
 
@@ -4935,6 +5035,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         const email = document.getElementById("edit-mem-email").value.trim();
         const category = document.getElementById("edit-mem-cat").value;
         const status = document.getElementById("edit-mem-status").value;
+        const reraNumber = (document.getElementById("edit-mem-rera")?.value || "").trim().toUpperCase();
         const gstin = (document.getElementById("edit-mem-gstin").value || "").trim().toUpperCase();
         const address = (document.getElementById("edit-mem-address").value || "").trim();
 
@@ -4949,6 +5050,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         m.email = email;
         m.category = category;
         m.status = status;
+        m.reraNumber = reraNumber || null;
         m.gstin = gstin || null;
         m.address = address || null;
 
@@ -5000,6 +5102,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         const mobile = document.getElementById("add-mem-mobile").value.trim();
         const email = document.getElementById("add-mem-email").value.trim();
         const category = document.getElementById("add-mem-cat").value;
+        const reraNumber = (document.getElementById("add-mem-rera")?.value || "").trim().toUpperCase();
         const gstin = (document.getElementById("add-mem-gstin").value || "").trim().toUpperCase();
         const address = (document.getElementById("add-mem-address").value || "").trim();
 
@@ -5036,6 +5139,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
           parentMemberId,
           parentMemberName,
           parentMemberMobile,
+          reraNumber: reraNumber || null,
           gstin: gstin || null,
           address: address || null,
           company: company || "CREA Member Brokerage",
@@ -5258,7 +5362,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                   <option value="Cheque Deposit (Cleared)">Cheque Deposit (Cleared)</option>
                   <option value="UPI / QR Code Transfer">UPI / QR Code Transfer</option>
                   <option value="Cash Collection at CREA Office">Cash Collection at CREA Office</option>
-                  <option value="Executive / Board Waiver">Executive / Board Member Waiver</option>
+                  <option value="Executive Committee Waiver">Executive Committee Waiver</option>
                   <option value="Other Verified Mode">Other Verified Mode</option>
                 </select>
               </div>
@@ -5403,6 +5507,12 @@ Participants receive official CREA(I) accreditation credits, certified study mat
               : `🔒 Check-In Kiosk Closed: "${head.title}" took place on ${head.eventDate}.\n\nTo reopen check-in, an Admin can enable '🔴 Go Live' in the admin dashboard.`);
             return;
           }
+        }
+
+        // RULE: Welcome gift collection requires explicit Admin approval
+        if (mode === 'gift' && !head.giftEnabled) {
+          alert(`🚫 Gift Distribution Disabled: Delegate Kit & Welcome Gift distribution for "${head.title}" has not been approved by Admin yet.\n\nPlease enable "Delegate Kit & Gift Approval" in Program Settings or the Delegate Tracker before opening the gift kiosk.`);
+          return;
         }
 
         const isAttendance = mode === 'attendance' || mode === 'entry';
@@ -5704,6 +5814,28 @@ Participants receive official CREA(I) accreditation credits, certified study mat
             if (statusBox) statusBox.innerHTML = `<span style="color: #38bdf8;">ℹ️ <strong>${payment.payerName}</strong> Re-Entry Verified.</span>`;
           }
         } else {
+          if (eventHead && !eventHead.giftEnabled) {
+            this.playBeep('error');
+            if (resultBox) {
+              resultBox.style.display = "block";
+              resultBox.innerHTML = `
+                <div style="background: rgba(239, 68, 68, 0.2); border: 2px solid #ef4444; border-radius: 10px; padding: 14px; color: #fca5a5;">
+                  <div style="font-weight: 800; font-size: 16px; color: #f87171; margin-bottom: 6px;">
+                    🚫 GIFT COLLECTION DISABLED BY ADMIN
+                  </div>
+                  <div style="font-size: 13px; color: #fff;">
+                    Welcome Gift / Takeaway Kit distribution for <strong>${eventHead.title}</strong> is currently locked.
+                  </div>
+                  <div style="font-size: 12px; margin-top: 6px; line-height: 1.4;">
+                    An Admin must activate and approve gift distribution in the Program Settings or Delegate Tracker before gifts can be issued.
+                  </div>
+                </div>
+              `;
+            }
+            if (statusBox) statusBox.innerHTML = `<span style="color: #ef4444;">🚫 Gift collection disabled: Admin approval required.</span>`;
+            return;
+          }
+
           if (!payment.giftCollected) {
             payment.giftCollected = true;
             payment.giftCollectedAt = now.toISOString();
@@ -5841,6 +5973,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         const isLive = this.isHeadLive(head);
         const isEventToday = isLive;
         const isEarly = eventDateStr && eventDateStr > todayStr;
+        const isGiftApproved = Boolean(head.giftEnabled);
 
         let registrations = this.data.payments.filter(p => p.headId === headId || p.headCode === head.code || p.headTitle === head.title);
 
@@ -5892,7 +6025,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
 
               <!-- Event Date & Live Status Policy Notice -->
               ${isLive ? `
-                <div style="background: rgba(16, 185, 129, 0.12); border: 1.5px solid #10b981; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                <div style="background: rgba(16, 185, 129, 0.12); border: 1.5px solid #10b981; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 12.5px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
                   <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 20px;">🔴</span>
                     <div>
@@ -5902,7 +6035,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                   <button onclick="app.toggleHeadLive('${headId}')" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 3px 8px; color: #f87171; border-color: rgba(239, 68, 68, 0.4);" title="Turn off Live Mode">⏹ End Live Mode</button>
                 </div>
               ` : `
-                <div style="background: ${isEarly ? 'rgba(56, 189, 248, 0.12)' : 'rgba(239, 68, 68, 0.12)'}; border: 1.5px solid ${isEarly ? '#38bdf8' : '#ef4444'}; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                <div style="background: ${isEarly ? 'rgba(56, 189, 248, 0.12)' : 'rgba(239, 68, 68, 0.12)'}; border: 1.5px solid ${isEarly ? '#38bdf8' : '#ef4444'}; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 12.5px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
                   <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 20px;">${isEarly ? '⏳' : '🔒'}</span>
                     <div>
@@ -5914,12 +6047,35 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                 </div>
               `}
 
+              <!-- Delegate Kit & Gift Approval Policy Notice -->
+              ${isGiftApproved ? `
+                <div style="background: rgba(168, 85, 247, 0.12); border: 1.5px solid #a855f7; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 20px;">🎁</span>
+                    <div>
+                      <strong style="color: #c084fc;">Delegate Kit & Gifts Approved</strong>: Distribution of welcome gifts and kits is currently <strong>ACTIVE</strong> for this event.
+                    </div>
+                  </div>
+                  <button onclick="app.toggleHeadGift('${headId}')" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 10px; color: #f87171; border-color: rgba(239, 68, 68, 0.4);" title="Click to disable gift collection">🚫 Disable Gift Collection</button>
+                </div>
+              ` : `
+                <div style="background: rgba(239, 68, 68, 0.12); border: 1.5px solid #ef4444; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 20px;">🚫</span>
+                    <div>
+                      <strong style="color: #f87171;">Delegate Kit & Gifts Disabled (Pending Admin Approval)</strong>: Welcome gifts/kits cannot be handed out or scanned until Admin approves.
+                    </div>
+                  </div>
+                  <button onclick="app.toggleHeadGift('${headId}')" class="btn btn-primary btn-sm" style="font-size: 11px; padding: 4px 12px; background: #9333ea; border-color: #a855f7;" title="Approve and activate gift collection now">🎁 Approve Gifts Now</button>
+                </div>
+              `}
+
               <!-- Filter & Actions Bar -->
               <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;">
                 <input type="text" id="roster-search" class="form-input" placeholder="Search by name, company, mobile, email, invoice..." value="${searchTerm}" style="max-width: 360px; padding: 6px 12px; font-size: 12px;" oninput="app.openDelegateTracker('${headId}', this.value)">
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                   <button onclick="app.openScannerModal('${headId}', 'attendance')" class="btn btn-secondary btn-sm" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" title="${isEventToday ? 'Open scanner' : 'Check-in unlocks when Live Mode is enabled'}">📷 Scan Entry</button>
-                  <button onclick="app.openScannerModal('${headId}', 'gift')" class="btn btn-secondary btn-sm" style="color: #c084fc; border-color: rgba(168, 85, 247, 0.4);" title="${isEventToday ? 'Open gift scanner' : 'Gift collection unlocks when Live Mode is enabled'}">🎁 Scan Gift</button>
+                  <button onclick="${isGiftApproved ? `app.openScannerModal('${headId}', 'gift')` : `alert('🚫 Gift Distribution is disabled: Admin approval required before scanning gifts.')`}" class="btn btn-secondary btn-sm" style="color: #c084fc; border-color: rgba(168, 85, 247, 0.4); ${!isGiftApproved ? 'opacity: 0.55;' : ''}" title="${isGiftApproved ? (isEventToday ? 'Open gift scanner' : 'Gift collection unlocks when Live Mode is enabled') : 'Gift distribution requires admin approval'}">🎁 Scan Gift</button>
                   <button onclick="app.exportDelegateCSV('${headId}')" class="btn btn-primary btn-sm" style="font-size: 11.5px; background: linear-gradient(135deg, #059669, #047857); border-color: #10b981;" title="Download Attendance & Gift Roster as Excel-compatible CSV">📥 Download Roster (Excel / CSV)</button>
                 </div>
               </div>
@@ -5979,9 +6135,13 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                             <button onclick="app.toggleGift('${p.invoiceNo}', '${headId}')" class="btn btn-sm" style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid #9333ea; font-size: 11px; padding: 4px 8px;" title="Click to undo gift handover">
                               🎁 Claimed (${new Date(p.giftCollectedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })})
                             </button>
-                          ` : `
+                          ` : isGiftApproved ? `
                             <button onclick="app.toggleGift('${p.invoiceNo}', '${headId}')" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px; ${!isEventToday ? 'opacity: 0.65;' : ''}" title="${!isEventToday ? 'Gift collection unlocks when Live Mode is enabled' : 'Hand Over Gift'}">
                               ${!isEventToday ? '🔒 ' : '+ '}Hand Over Gift
+                            </button>
+                          ` : `
+                            <button onclick="alert('🚫 Takeaway kit / gift distribution is disabled by Admin for this event. Please activate gift approval above first.')" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px; opacity: 0.55; color: #f87171; border-color: rgba(239, 68, 68, 0.3);" title="Gifts disabled - Admin approval pending">
+                              🚫 Gifts Disabled
                             </button>
                           `}
                         </td>
@@ -6037,6 +6197,10 @@ Participants receive official CREA(I) accreditation credits, certified study mat
 
       async toggleGift(invoiceNo, headId) {
         const head = this.data.heads.find(h => h.id === headId);
+        if (head && !head.giftEnabled) {
+          alert(`🚫 Gift Distribution Disabled: Delegate Kit & Welcome Gift distribution for "${head.title}" has not been approved by Admin yet.\n\nPlease click "🎁 Approve Gifts Now" in the banner above before marking gifts.`);
+          return;
+        }
         if (!this.isHeadLive(head) && head && head.eventDate) {
           const eventDateStr = this.getEventDateOnly(head.eventDate);
           const todayStr = this.getTodayDateOnly();
@@ -6202,7 +6366,8 @@ Participants receive official CREA(I) accreditation credits, certified study mat
           venue: "All Regional Chapters",
           activeUntil: `${nextYear + 1}-03-31T23:59:59`,
           status: "active",
-          prices: { associate_member: 5000, member: 10000, board_member: 8000, non_member: null },
+          giftEnabled: false,
+          prices: { associate_member: 5000, member: 10000, non_member: null },
           writeup: `Annual membership renewal for accredited real estate brokerages for ${nextYear}-${nextYear + 1}. Unlocks full integration with CREA Multi-Listing Exchange, legal escrow protection, and certified broker masterclasses.`
         };
 

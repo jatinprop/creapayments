@@ -19,13 +19,14 @@ CREATE TABLE public.members (
   name TEXT NOT NULL,
   mobile TEXT NOT NULL UNIQUE,
   email TEXT NOT NULL,
-  category TEXT NOT NULL CHECK (category IN ('member', 'associate_member', 'board_member')) DEFAULT 'member',
+  category TEXT NOT NULL CHECK (category IN ('member', 'associate_member')) DEFAULT 'member',
   parent_member_id TEXT DEFAULT NULL,
   parent_member_name TEXT DEFAULT NULL,
   parent_member_mobile TEXT DEFAULT NULL,
   company TEXT NOT NULL DEFAULT 'Independent Broker',
   city TEXT NOT NULL DEFAULT 'Bangalore',
   gstin TEXT DEFAULT NULL,
+  rera_number TEXT DEFAULT NULL,
   address TEXT DEFAULT NULL,
   status TEXT NOT NULL CHECK (status IN ('active', 'deactivated')) DEFAULT 'active',
   last_paid_fy TEXT DEFAULT NULL,
@@ -54,8 +55,9 @@ CREATE TABLE public.payment_heads (
   active_until TIMESTAMPTZ NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('active', 'inactive', 'deactivated', 'deleted')) DEFAULT 'active',
   is_live BOOLEAN NOT NULL DEFAULT false,
+  gift_enabled BOOLEAN NOT NULL DEFAULT false,
   priority INTEGER NOT NULL DEFAULT 3,
-  prices JSONB NOT NULL DEFAULT '{"associate_member": null, "member": null, "board_member": null, "non_member": null}'::jsonb,
+  prices JSONB NOT NULL DEFAULT '{"associate_member": null, "member": null, "non_member": null}'::jsonb,
   writeup TEXT DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
@@ -64,6 +66,7 @@ CREATE TABLE public.payment_heads (
 CREATE INDEX idx_heads_code ON public.payment_heads(code);
 CREATE INDEX idx_heads_status ON public.payment_heads(status);
 CREATE INDEX idx_heads_is_live ON public.payment_heads(is_live);
+CREATE INDEX idx_heads_gift_enabled ON public.payment_heads(gift_enabled);
 CREATE INDEX idx_heads_priority ON public.payment_heads(priority);
 
 -- 3. Invoice Sequence Counters Table
@@ -83,7 +86,7 @@ CREATE TABLE public.payments (
   head_code TEXT NOT NULL,
   head_title TEXT NOT NULL,
   payer_type TEXT NOT NULL CHECK (payer_type IN ('member', 'non_member')),
-  payer_category TEXT NOT NULL CHECK (payer_category IN ('associate_member', 'member', 'board_member', 'non_member')),
+  payer_category TEXT NOT NULL CHECK (payer_category IN ('associate_member', 'member', 'non_member')),
   payer_id TEXT,
   payer_name TEXT NOT NULL,
   payer_mobile TEXT NOT NULL,

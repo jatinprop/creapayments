@@ -35,13 +35,14 @@ CREATE TABLE public.members (
   name TEXT NOT NULL,
   mobile TEXT NOT NULL UNIQUE,
   email TEXT NOT NULL,
-  category TEXT NOT NULL CHECK (category IN ('member', 'associate_member', 'board_member')) DEFAULT 'member',
+  category TEXT NOT NULL CHECK (category IN ('member', 'associate_member')) DEFAULT 'member',
   parent_member_id TEXT DEFAULT NULL,
   parent_member_name TEXT DEFAULT NULL,
   parent_member_mobile TEXT DEFAULT NULL,
   company TEXT NOT NULL DEFAULT 'Independent Broker',
   city TEXT NOT NULL DEFAULT 'Bangalore',
   gstin TEXT DEFAULT NULL,
+  rera_number TEXT DEFAULT NULL,
   address TEXT DEFAULT NULL,
   status TEXT NOT NULL CHECK (status IN ('active', 'deactivated')) DEFAULT 'active',
   last_paid_fy TEXT DEFAULT NULL,
@@ -70,8 +71,9 @@ CREATE TABLE public.payment_heads (
   active_until TIMESTAMPTZ NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('active', 'inactive', 'deactivated', 'deleted')) DEFAULT 'active',
   is_live BOOLEAN NOT NULL DEFAULT false,
+  gift_enabled BOOLEAN NOT NULL DEFAULT false,
   priority INTEGER NOT NULL DEFAULT 3,
-  prices JSONB NOT NULL DEFAULT '{"associate_member": null, "member": null, "board_member": null, "non_member": null}'::jsonb,
+  prices JSONB NOT NULL DEFAULT '{"associate_member": null, "member": null, "non_member": null}'::jsonb,
   writeup TEXT DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
@@ -80,6 +82,7 @@ CREATE TABLE public.payment_heads (
 CREATE INDEX idx_heads_code ON public.payment_heads(code);
 CREATE INDEX idx_heads_status ON public.payment_heads(status);
 CREATE INDEX idx_heads_is_live ON public.payment_heads(is_live);
+CREATE INDEX idx_heads_gift_enabled ON public.payment_heads(gift_enabled);
 CREATE INDEX idx_heads_priority ON public.payment_heads(priority);
 
 -- 3. Invoice Sequence Counters Table
@@ -99,7 +102,7 @@ CREATE TABLE public.payments (
   head_code TEXT NOT NULL,
   head_title TEXT NOT NULL,
   payer_type TEXT NOT NULL CHECK (payer_type IN ('member', 'non_member')),
-  payer_category TEXT NOT NULL CHECK (payer_category IN ('associate_member', 'member', 'board_member', 'non_member')),
+  payer_category TEXT NOT NULL CHECK (payer_category IN ('associate_member', 'member', 'non_member')),
   payer_id TEXT,
   payer_name TEXT NOT NULL,
   payer_mobile TEXT NOT NULL,
@@ -196,12 +199,12 @@ let seedSql = `-- ==============================================================
 -- ==============================================================================
 
 -- 1. Seed Members (7 Members)
-INSERT INTO public.members (id, name, mobile, email, category, parent_member_id, parent_member_name, parent_member_mobile, company, city, gstin, address, status, last_paid_fy, payment_means, activation_note, joined_date)
+INSERT INTO public.members (id, name, mobile, email, category, parent_member_id, parent_member_name, parent_member_mobile, company, city, gstin, rera_number, address, status, last_paid_fy, payment_means, activation_note, joined_date)
 VALUES
 `;
 
 const memberRows = data.members.map(m => {
-  return `  (${escapeSql(m.id)}, ${escapeSql(m.name)}, ${escapeSql(m.mobile)}, ${escapeSql(m.email)}, ${escapeSql(m.category)}, ${escapeSql(m.parentMemberId)}, ${escapeSql(m.parentMemberName)}, ${escapeSql(m.parentMemberMobile)}, ${escapeSql(m.company)}, ${escapeSql(m.city)}, ${escapeSql(m.gstin)}, ${escapeSql(m.address)}, ${escapeSql(m.status)}, ${escapeSql(m.lastPaidFY)}, ${escapeSql(m.paymentMeans)}, ${escapeSql(m.activationNote)}, ${escapeSql(m.joinedDate)})`;
+  return `  (${escapeSql(m.id)}, ${escapeSql(m.name)}, ${escapeSql(m.mobile)}, ${escapeSql(m.email)}, ${escapeSql(m.category)}, ${escapeSql(m.parentMemberId)}, ${escapeSql(m.parentMemberName)}, ${escapeSql(m.parentMemberMobile)}, ${escapeSql(m.company)}, ${escapeSql(m.city)}, ${escapeSql(m.gstin)}, ${escapeSql(m.reraNumber || null)}, ${escapeSql(m.address)}, ${escapeSql(m.status)}, ${escapeSql(m.lastPaidFY)}, ${escapeSql(m.paymentMeans)}, ${escapeSql(m.activationNote)}, ${escapeSql(m.joinedDate)})`;
 });
 
 seedSql += memberRows.join(',\n') + `
@@ -216,6 +219,7 @@ ON CONFLICT (id) DO UPDATE SET
   company = EXCLUDED.company,
   city = EXCLUDED.city,
   gstin = EXCLUDED.gstin,
+  rera_number = EXCLUDED.rera_number,
   address = EXCLUDED.address,
   status = EXCLUDED.status,
   last_paid_fy = EXCLUDED.last_paid_fy,
@@ -224,13 +228,13 @@ ON CONFLICT (id) DO UPDATE SET
   joined_date = EXCLUDED.joined_date;
 
 -- 2. Seed Payment Heads (4 Programs)
-INSERT INTO public.payment_heads (id, code, title, type, event_date, event_time, venue, active_until, status, is_live, priority, prices, writeup)
+INSERT INTO public.payment_heads (id, code, title, type, event_date, event_time, venue, active_until, status, is_live, gift_enabled, priority, prices, writeup)
 VALUES
 `;
 
 const headRows = data.heads.map(h => {
   const pricesJson = JSON.stringify(h.prices || {});
-  return `  (${escapeSql(h.id)}, ${escapeSql(h.code)}, ${escapeSql(h.title)}, ${escapeSql(h.type)}, ${escapeSql(h.eventDate)}, ${escapeSql(h.eventTime || 'Full Day')}, ${escapeSql(h.venue || 'CREA(I) Centre, Bangalore')}, ${escapeSql(h.activeUntil)}, ${escapeSql(h.status || 'active')}, ${Boolean(h.isLive)}, ${Number(h.priority || 3)}, '${pricesJson.replace(/'/g, "''")}'::jsonb, ${escapeSql(h.writeup || '')})`;
+  return `  (${escapeSql(h.id)}, ${escapeSql(h.code)}, ${escapeSql(h.title)}, ${escapeSql(h.type)}, ${escapeSql(h.eventDate)}, ${escapeSql(h.eventTime || 'Full Day')}, ${escapeSql(h.venue || 'CREA(I) Centre, Bangalore')}, ${escapeSql(h.activeUntil)}, ${escapeSql(h.status || 'active')}, ${Boolean(h.isLive)}, ${Boolean(h.giftEnabled)}, ${Number(h.priority || 3)}, '${pricesJson.replace(/'/g, "''")}'::jsonb, ${escapeSql(h.writeup || '')})`;
 });
 
 seedSql += headRows.join(',\n') + `
@@ -244,6 +248,7 @@ ON CONFLICT (id) DO UPDATE SET
   active_until = EXCLUDED.active_until,
   status = EXCLUDED.status,
   is_live = EXCLUDED.is_live,
+  gift_enabled = EXCLUDED.gift_enabled,
   priority = EXCLUDED.priority,
   prices = EXCLUDED.prices,
   writeup = EXCLUDED.writeup;

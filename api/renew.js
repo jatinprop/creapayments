@@ -26,11 +26,11 @@ export default async function handler(req, res) {
       activeUntil: `${nextYear + 1}-03-31T23:59:59`,
       status: "active",
       prices: {
-        new_member: 12000,
+        associate_member: 5000,
         member: 10000,
-        board_member: 8000,
         non_member: null
       },
+      giftEnabled: false,
       writeup: `Annual membership renewal for CREA(I) accredited brokerages for the session ${nextYear}-${nextYear + 1}. All members enjoy uninterrupted access to CREA MLS, legal escrow mediation, and certified broker masterclasses.`
     };
 
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
     const local = readLocalData();
     local.members = local.members || [];
     local.members.forEach((m) => {
-      if (m.category === "new_member") m.category = "member";
+      if (m.category === "board_member" || m.category === "new_member") m.category = "member";
     });
     local.heads = local.heads || [];
     local.heads.unshift(renewalHead);
@@ -53,7 +53,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
-      message: `Annual Renewal successfully activated for all members! Head '${renewalHead.title}' created and New Members promoted to Regular Members.`,
+      message: `Annual Renewal successfully activated for all members! Head '${renewalHead.title}' created for dues settlement.`,
       head: renewalHead
     });
   } catch (error) {

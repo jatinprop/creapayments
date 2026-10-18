@@ -1,4 +1,4 @@
-import { upsertHead, setHeadLive } from "../lib/supabase.js";
+import { upsertHead, setHeadLive, setHeadGiftEnabled } from "../lib/supabase.js";
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -24,6 +24,16 @@ export default async function handler(req, res) {
         success: true,
         head,
         message: `Program '${head?.title || body.id}' Live mode is now ${Boolean(body.isLive) ? 'ACTIVE' : 'OFF'}.`
+      });
+    }
+
+    // 1B. Dedicated Gift Approval Toggle
+    if (body.action === "toggle_gift" || (body.id && body.giftEnabled !== undefined && !body.title)) {
+      const head = await setHeadGiftEnabled(body.id, body.giftEnabled);
+      return res.status(200).json({
+        success: true,
+        head,
+        message: `Takeaway kit / Gift distribution for '${head?.title || body.id}' is now ${Boolean(body.giftEnabled) ? 'APPROVED & ACTIVE' : 'DISABLED'}.`
       });
     }
 
