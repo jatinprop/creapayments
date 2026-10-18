@@ -101,7 +101,7 @@ Every payment head enforces a strict cutoff datetime (`activeUntil`). Once the d
 
 ### 6. Official Printable / Downloadable Tax Invoice
 - Clicking **"View / Print Tax Invoice"** opens a compliant tax invoice conforming to Rule 46 of the CGST Rules, 2017.
-- Complete with CREA(I) registered office address, GSTIN (`29AAAAA0000A1Z5`), SAC code, digital verification seal, and clean print CSS for A4 PDF export.
+- Complete with CREA(I) registered office address (No. 702, Barton Center, #84 M.G.Road,Bangalore-560001,Karnataka,India), GSTIN (`29AABAC7593A1ZR`), SAC code, digital verification seal, and clean print CSS for A4 PDF export.
 
 ### 7. Admin Dashboard & Analytics
 - **KPI Metrics**: Total Gross Collections, Base Value, 18% GST Collected, Member vs Non-Member revenue split.
