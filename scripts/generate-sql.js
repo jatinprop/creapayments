@@ -69,6 +69,7 @@ CREATE TABLE public.payment_heads (
   venue TEXT DEFAULT 'CREA(I) Centre, Bangalore',
   active_until TIMESTAMPTZ NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('active', 'inactive', 'deactivated', 'deleted')) DEFAULT 'active',
+  is_live BOOLEAN NOT NULL DEFAULT false,
   priority INTEGER NOT NULL DEFAULT 3,
   prices JSONB NOT NULL DEFAULT '{"associate_member": null, "member": null, "board_member": null, "non_member": null}'::jsonb,
   writeup TEXT DEFAULT '',
@@ -78,6 +79,7 @@ CREATE TABLE public.payment_heads (
 
 CREATE INDEX idx_heads_code ON public.payment_heads(code);
 CREATE INDEX idx_heads_status ON public.payment_heads(status);
+CREATE INDEX idx_heads_is_live ON public.payment_heads(is_live);
 CREATE INDEX idx_heads_priority ON public.payment_heads(priority);
 
 -- 3. Invoice Sequence Counters Table
@@ -222,13 +224,13 @@ ON CONFLICT (id) DO UPDATE SET
   joined_date = EXCLUDED.joined_date;
 
 -- 2. Seed Payment Heads (4 Programs)
-INSERT INTO public.payment_heads (id, code, title, type, event_date, event_time, venue, active_until, status, priority, prices, writeup)
+INSERT INTO public.payment_heads (id, code, title, type, event_date, event_time, venue, active_until, status, is_live, priority, prices, writeup)
 VALUES
 `;
 
 const headRows = data.heads.map(h => {
   const pricesJson = JSON.stringify(h.prices || {});
-  return `  (${escapeSql(h.id)}, ${escapeSql(h.code)}, ${escapeSql(h.title)}, ${escapeSql(h.type)}, ${escapeSql(h.eventDate)}, ${escapeSql(h.eventTime || 'Full Day')}, ${escapeSql(h.venue || 'CREA(I) Centre, Bangalore')}, ${escapeSql(h.activeUntil)}, ${escapeSql(h.status || 'active')}, ${Number(h.priority || 3)}, '${pricesJson.replace(/'/g, "''")}'::jsonb, ${escapeSql(h.writeup || '')})`;
+  return `  (${escapeSql(h.id)}, ${escapeSql(h.code)}, ${escapeSql(h.title)}, ${escapeSql(h.type)}, ${escapeSql(h.eventDate)}, ${escapeSql(h.eventTime || 'Full Day')}, ${escapeSql(h.venue || 'CREA(I) Centre, Bangalore')}, ${escapeSql(h.activeUntil)}, ${escapeSql(h.status || 'active')}, ${Boolean(h.isLive)}, ${Number(h.priority || 3)}, '${pricesJson.replace(/'/g, "''")}'::jsonb, ${escapeSql(h.writeup || '')})`;
 });
 
 seedSql += headRows.join(',\n') + `
@@ -241,6 +243,7 @@ ON CONFLICT (id) DO UPDATE SET
   venue = EXCLUDED.venue,
   active_until = EXCLUDED.active_until,
   status = EXCLUDED.status,
+  is_live = EXCLUDED.is_live,
   priority = EXCLUDED.priority,
   prices = EXCLUDED.prices,
   writeup = EXCLUDED.writeup;

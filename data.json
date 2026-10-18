@@ -135,6 +135,7 @@
       "venue": "CREA(I) Headquarters & All Chapters",
       "activeUntil": "2027-03-31T23:59:59",
       "status": "active",
+      "isLive": false,
       "prices": {
         "associate_member": 5000,
         "member": 10000,
@@ -154,11 +155,13 @@
       "venue": "The Lalit Hotel, High Grounds, Bangalore",
       "activeUntil": "2026-10-28T09:00:00",
       "status": "active",
+      "isLive": false,
       "prices": {
         "associate_member": 1200,
         "member": 1200,
         "board_member": 0,
-        "non_member": 2500
+        "non_member": 2500,
+        "is_live": false
       },
       "writeup": "RERA litigation and title verification scrutiny have transformed real estate transactions into rigorous legal engagements. This full-day intensive masterclass is curated specifically for practicing real estate brokers, leasing executives, and independent agents seeking to eliminate liability and elevate deal closings.\n\nIncludes delegate entry pass QR, complimentary welcome gift kit QR, legal draft toolkit on pendrive, gourmet lunch, and accredited certification."
     },
@@ -173,6 +176,7 @@
       "venue": "Virtual Live Interactive Studio (Zoom HD)",
       "activeUntil": "2026-11-18T13:30:00",
       "status": "active",
+      "isLive": false,
       "prices": {
         "associate_member": 800,
         "member": 800,
@@ -192,6 +196,7 @@
       "venue": "Grand Ballroom, The Leela Palace, Old Airport Road, Bangalore",
       "activeUntil": "2026-12-15T16:00:00",
       "status": "active",
+      "isLive": false,
       "prices": {
         "associate_member": 2800,
         "member": 2800,

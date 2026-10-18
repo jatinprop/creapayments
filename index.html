@@ -600,6 +600,7 @@
 
         // Default landing strictly on Admin Authentication Portal
         this.switchTab("admin");
+        this.startAutoSync();
       },
 
       loadFromStorage() {
@@ -657,6 +658,123 @@
       isEventToday(eventDate) {
         if (!eventDate) return false;
         return this.getEventDateOnly(eventDate) === this.getTodayDateOnly();
+      },
+
+      isHeadLive(head) {
+        if (!head) return false;
+        if (head.isLive === true) return true;
+        if (head.prices && head.prices.is_live === true) return true;
+        if (head.eventDate && this.isEventToday(head.eventDate)) return true;
+        return false;
+      },
+
+      async toggleHeadLive(headId) {
+        const head = this.data.heads.find(h => h.id === headId);
+        if (!head) return;
+        const currentLive = this.isHeadLive(head);
+        const newLiveState = !currentLive;
+        head.isLive = newLiveState;
+        if (head.prices) head.prices.is_live = newLiveState;
+        this.saveToStorage();
+
+        // If inside delegate tracker, re-render it
+        if (this._currentTrackerHeadId === headId && document.getElementById("delegate-tracker-table")) {
+          const searchInput = document.getElementById("roster-search");
+          this.openDelegateTracker(headId, searchInput ? searchInput.value : '');
+        } else {
+          this.render();
+        }
+
+        try {
+          const res = await fetch("/api/head", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: headId,
+              isLive: newLiveState,
+              action: "toggle_live"
+            })
+          });
+          const json = await res.json();
+          if (json && json.head) {
+            head.isLive = Boolean(json.head.isLive);
+            this.saveToStorage();
+          }
+        } catch(e) {
+          console.warn("Failed to toggle live status on server:", e);
+        }
+      },
+
+      startAutoSync() {
+        if (this._syncInterval) clearInterval(this._syncInterval);
+
+        const doSync = async () => {
+          // If a modal form or camera scanner is active, do not disturb user typing or camera
+          const isScannerActive = !!document.getElementById("scanner-video");
+          const editModal = document.getElementById("edit-head-title");
+          const newHeadModal = document.getElementById("head-title");
+          const editMemberModal = document.getElementById("edit-mem-name");
+          const newMemberModal = document.getElementById("mem-name");
+          if (isScannerActive || editModal || newHeadModal || editMemberModal || newMemberModal) {
+            return;
+          }
+
+          try {
+            const res = await fetch(`/api/data?_=${Date.now()}`, {
+              cache: "no-store",
+              headers: { "Cache-Control": "no-cache", "Pragma": "no-cache" }
+            });
+            if (!res.ok) return;
+            const json = await res.json();
+            if (!json || !json.data) return;
+
+            const serverData = json.data;
+            let dataUpdated = false;
+
+            // 1. Sync Heads (dates, live flags, prices)
+            if (JSON.stringify(serverData.heads || []) !== JSON.stringify(this.data.heads || [])) {
+              this.data.heads = serverData.heads || [];
+              dataUpdated = true;
+            }
+
+            // 2. Sync Payments (attendances, gifts, new transactions)
+            if (JSON.stringify(serverData.payments || []) !== JSON.stringify(this.data.payments || [])) {
+              this.data.payments = serverData.payments || [];
+              dataUpdated = true;
+            }
+
+            // 3. Sync Members
+            if (JSON.stringify(serverData.members || []) !== JSON.stringify(this.data.members || [])) {
+              this.data.members = serverData.members || [];
+              dataUpdated = true;
+            }
+
+            if (dataUpdated) {
+              this.saveToStorage();
+              // Check if Delegate Tracker is currently open
+              const trackerTable = document.getElementById("delegate-tracker-table");
+              if (trackerTable && this._currentTrackerHeadId) {
+                const searchInput = document.getElementById("roster-search");
+                this.openDelegateTracker(this._currentTrackerHeadId, searchInput ? searchInput.value : '');
+              } else if (!document.getElementById("modal-root")?.innerHTML.trim()) {
+                this.render();
+              }
+            }
+          } catch(err) {
+            // Silently ignore temporary network drops
+          }
+        };
+
+        // Poll every 3.5 seconds
+        this._syncInterval = setInterval(doSync, 3500);
+
+        // Immediate sync when mobile tab or device wakes up
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") doSync();
+        });
+        window.addEventListener("focus", () => {
+          doSync();
+        });
       },
 
       getHeadPrice(head, category) {
@@ -2118,6 +2236,7 @@
                       const isDeactivated = h.status === 'deactivated' || h.status === 'inactive';
                       const isExpired = h.activeUntil && new Date(h.activeUntil) < now;
                       const isToday = this.isEventToday(h.eventDate);
+                      const isLive = this.isHeadLive(h);
 
                       const pAssoc = (h.prices?.associate_member ?? h.prices?.new_member) != null ? `₹${Number(h.prices.associate_member ?? h.prices.new_member).toLocaleString('en-IN')}` : '-';
                       const pMem = h.prices?.member != null ? `₹${Number(h.prices.member).toLocaleString('en-IN')}` : '-';
@@ -2130,7 +2249,7 @@
                             <div>
                               <strong style="color: ${isDeleted ? '#94a3b8' : isDeactivated ? '#cbd5e1' : '#ffffff'}; font-size: 13.5px;">${h.title}</strong>
                               <div style="font-size: 11px; color: #38bdf8; margin-top: 3px;">
-                                Code: <strong>${h.code}</strong> • Event: ${h.eventDate || 'N/A'}${isToday ? ' <span class="badge" style="background: rgba(16, 185, 129, 0.25); color: #34d399; border: 1px solid #10b981; font-size: 10px; padding: 1px 6px;">● LIVE TODAY</span>' : ''} • Closes: ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                Code: <strong>${h.code}</strong> • Event: ${h.eventDate || 'N/A'}${isLive ? ' <span class="badge" style="background: rgba(239, 68, 68, 0.25); color: #f87171; border: 1.5px solid #ef4444; font-size: 10px; padding: 1px 6px; font-weight: 700;">🔴 LIVE NOW</span>' : isToday ? ' <span class="badge" style="background: rgba(16, 185, 129, 0.25); color: #34d399; border: 1px solid #10b981; font-size: 10px; padding: 1px 6px;">● TODAY</span>' : ''} • Closes: ${new Date(h.activeUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                               </div>
                             </div>
                           </td>
@@ -2202,11 +2321,14 @@
                                 </button>
                               `}
                               ${h.type !== 'membership' ? `
-                                <button onclick="app.openScannerModal('${h.id}', 'attendance')" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11.5px; background: #0284c7; border-color: #0369a1;" title="${isToday ? 'Live Today: Open camera scanner to record gate attendance' : 'Gate attendance check-in unlocks on event day: ' + (h.eventDate || 'N/A')}">
-                                  📷 Attendance${isToday ? ' (Live)' : ''}
+                                <button onclick="app.toggleHeadLive('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; ${isLive ? 'background: rgba(239, 68, 68, 0.2); color: #f87171; border-color: #ef4444; font-weight: 700;' : 'color: #34d399; border-color: rgba(16, 185, 129, 0.4);'}" title="${isLive ? 'Live Mode is currently ON in database. Click to end live check-in mode.' : 'Click to turn ON Live Event Mode in database immediately across all devices.'}">
+                                  ${isLive ? '⏹ End Live' : '🔴 Go Live'}
                                 </button>
-                                <button onclick="app.openScannerModal('${h.id}', 'gift')" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11.5px; background: #d97706; border-color: #b45309;" title="${isToday ? 'Live Today: Open camera scanner to verify delegate kit handover' : 'Gift collection unlocks on event day: ' + (h.eventDate || 'N/A')}">
-                                  🎁 Gift Kiosk${isToday ? ' (Live)' : ''}
+                                <button onclick="app.openScannerModal('${h.id}', 'attendance')" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11.5px; background: #0284c7; border-color: #0369a1;" title="${isLive ? 'Live Event Active: Open camera scanner to record gate attendance' : 'Gate attendance check-in unlocks on event day: ' + (h.eventDate || 'N/A') + ' or via Live toggle'}">
+                                  📷 Attendance${isLive ? ' (Live)' : ''}
+                                </button>
+                                <button onclick="app.openScannerModal('${h.id}', 'gift')" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11.5px; background: #d97706; border-color: #b45309;" title="${isLive ? 'Live Event Active: Open camera scanner to verify delegate kit handover' : 'Gift collection unlocks on event day: ' + (h.eventDate || 'N/A') + ' or via Live toggle'}">
+                                  🎁 Gift Kiosk${isLive ? ' (Live)' : ''}
                                 </button>
                                 <button onclick="app.openDelegateTracker('${h.id}')" class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11.5px; border-color: rgba(56, 189, 248, 0.35); color: #38bdf8;" title="View delegates roster, mark check-ins and export list">
                                   📊 Roster (${hPays.length})
@@ -4144,6 +4266,21 @@ Registrations are strictly capped to ensure personalized interactive facilitatio
                       <input type="text" id="edit-head-venue" value="${app.escapeHtml(head.venue || '')}" placeholder="e.g. The Lalit Hotel, Bangalore" class="form-input">
                     </div>
                   </div>
+
+                  <div style="background: rgba(15, 23, 42, 0.7); border: 1.5px solid ${head.isLive ? '#ef4444' : 'rgba(148, 163, 184, 0.3)'}; border-radius: 8px; padding: 12px; margin-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                    <div>
+                      <div style="font-size: 13px; font-weight: 700; color: ${head.isLive ? '#f87171' : '#ffffff'}; display: flex; align-items: center; gap: 6px;">
+                        <span>${head.isLive ? '🔴' : '⚪'}</span> <span>Live Event Mode (Database-Controlled)</span>
+                        <span class="badge" style="${head.isLive ? 'background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444;' : 'background: rgba(148, 163, 184, 0.15); color: #94a3b8;'}">${head.isLive ? 'LIVE NOW' : 'STANDBY'}</span>
+                      </div>
+                      <div style="font-size: 11.5px; color: var(--text-dim); margin-top: 3px;">
+                        When checked, gate QR entry kiosks and welcome gift collection are immediately unlocked across all mobile phones and admin screens, syncing directly to the Supabase database.
+                      </div>
+                    </div>
+                    <label style="position: relative; display: inline-flex; align-items: center; cursor: pointer;">
+                      <input type="checkbox" id="edit-head-is-live" ${head.isLive ? 'checked' : ''} style="width: 22px; height: 22px; accent-color: #ef4444; cursor: pointer;">
+                    </label>
+                  </div>
                   <div id="date-extension-feedback" style="font-size: 11.5px; color: #34d399; margin-top: 8px; display: none;"></div>
                 </div>
 
@@ -4418,6 +4555,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         const eventTime = document.getElementById("edit-head-time").value.trim();
         const venue = document.getElementById("edit-head-venue").value.trim();
         const writeup = document.getElementById("edit-head-writeup").value.trim();
+        const isLive = document.getElementById("edit-head-is-live")?.checked ?? head.isLive ?? false;
 
         const parsePrice = (id) => {
           const el = document.getElementById(id);
@@ -4448,12 +4586,14 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         head.venue = venue;
         head.prices = prices;
         head.writeup = writeup;
+        head.isLive = isLive;
+        if (head.prices) head.prices.is_live = isLive;
 
         this.saveToStorage();
 
-        // Also push to server if running
+        // Also push to server & Supabase
         try {
-          await fetch("/api/head/update", {
+          await fetch("/api/head", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -4463,6 +4603,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
               type,
               status,
               priority,
+              isLive,
               eventDate,
               eventTime: head.eventTime,
               activeUntil,
@@ -5250,16 +5391,16 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         const head = this.data.heads.find(h => h.id === headId);
         if (!head) return;
 
-        // RULE: Attendance and gift collection only allowed on the day of the training/event held
-        if (head.eventDate) {
+        // RULE: Attendance and gift collection allowed if Live Mode is active in database or on the scheduled event day
+        if (!this.isHeadLive(head) && head.eventDate) {
           const eventDateStr = this.getEventDateOnly(head.eventDate);
           const todayStr = this.getTodayDateOnly();
           if (eventDateStr !== todayStr) {
             const isEarly = eventDateStr > todayStr;
             const actionName = (mode === 'attendance' || mode === 'entry') ? 'Gate attendance check-in' : 'Welcome gift collection';
             alert(isEarly
-              ? `⚠️ Check-In Kiosk Locked: "${head.title}" is scheduled for ${head.eventDate}.\n\n${actionName} is strictly permitted on the day of the training/event held only (not early or later).`
-              : `🔒 Check-In Kiosk Closed: "${head.title}" took place on ${head.eventDate}.\n\n${actionName} is strictly permitted on the day of the training/event held only (not early or later).`);
+              ? `⚠️ Check-In Kiosk Locked: "${head.title}" is scheduled for ${head.eventDate}.\n\n${actionName} is permitted on the scheduled event day, or when an Admin enables '🔴 Go Live' in the admin dashboard.`
+              : `🔒 Check-In Kiosk Closed: "${head.title}" took place on ${head.eventDate}.\n\nTo reopen check-in, an Admin can enable '🔴 Go Live' in the admin dashboard.`);
             return;
           }
         }
@@ -5691,12 +5832,14 @@ Participants receive official CREA(I) accreditation credits, certified study mat
 
       // DELEGATE ATTENDANCE & GIFT TRACKER (Roster)
       openDelegateTracker(headId, searchTerm = '') {
+        this._currentTrackerHeadId = headId;
         const head = this.data.heads.find(h => h.id === headId);
         if (!head) return;
 
         const eventDateStr = this.getEventDateOnly(head.eventDate);
         const todayStr = this.getTodayDateOnly();
-        const isEventToday = eventDateStr === todayStr;
+        const isLive = this.isHeadLive(head);
+        const isEventToday = isLive;
         const isEarly = eventDateStr && eventDateStr > todayStr;
 
         let registrations = this.data.payments.filter(p => p.headId === headId || p.headCode === head.code || p.headTitle === head.title);
@@ -5747,21 +5890,27 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                 </div>
               </div>
 
-              <!-- Event Date Policy Notice -->
-              ${!isEventToday ? `
-                <div style="background: ${isEarly ? 'rgba(56, 189, 248, 0.12)' : 'rgba(239, 68, 68, 0.12)'}; border: 1.5px solid ${isEarly ? '#38bdf8' : '#ef4444'}; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; display: flex; align-items: center; gap: 10px;">
-                  <span style="font-size: 20px;">${isEarly ? '⏳' : '🔒'}</span>
-                  <div>
-                    <strong style="color: ${isEarly ? '#38bdf8' : '#f87171'};">${isEarly ? 'Upcoming Event Roster (Check-In Locked)' : 'Past Event Roster (Check-In Locked)'}</strong>: 
-                    This event is scheduled for <strong>${head.eventDate || 'N/A'}</strong>. Attendance check-in and gift collection can strictly only be marked on the day of the event (today is ${todayStr}).
+              <!-- Event Date & Live Status Policy Notice -->
+              ${isLive ? `
+                <div style="background: rgba(16, 185, 129, 0.12); border: 1.5px solid #10b981; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 20px;">🔴</span>
+                    <div>
+                      <strong style="color: #34d399;">Live Event Active (${head.eventDate || 'Today'})</strong>: Gate check-in and delegate kit handover are currently <strong>ACTIVE</strong> across all mobile & desktop platforms.
+                    </div>
                   </div>
+                  <button onclick="app.toggleHeadLive('${headId}')" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 3px 8px; color: #f87171; border-color: rgba(239, 68, 68, 0.4);" title="Turn off Live Mode">⏹ End Live Mode</button>
                 </div>
               ` : `
-                <div style="background: rgba(16, 185, 129, 0.12); border: 1.5px solid #10b981; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; display: flex; align-items: center; gap: 10px;">
-                  <span style="font-size: 20px;">✅</span>
-                  <div>
-                    <strong style="color: #34d399;">Live Event Day (${head.eventDate})</strong>: Gate check-in and delegate kit handover are currently ACTIVE for today.
+                <div style="background: ${isEarly ? 'rgba(56, 189, 248, 0.12)' : 'rgba(239, 68, 68, 0.12)'}; border: 1.5px solid ${isEarly ? '#38bdf8' : '#ef4444'}; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 20px;">${isEarly ? '⏳' : '🔒'}</span>
+                    <div>
+                      <strong style="color: ${isEarly ? '#38bdf8' : '#f87171'};">${isEarly ? 'Upcoming Event Roster (Check-In Standby)' : 'Past Event Roster (Check-In Standby)'}</strong>: 
+                      Scheduled for <strong>${head.eventDate || 'N/A'}</strong> (today is ${todayStr}). Check-in and gift kiosks are locked.
+                    </div>
                   </div>
+                  <button onclick="app.toggleHeadLive('${headId}')" class="btn btn-primary btn-sm" style="font-size: 11px; padding: 4px 10px; background: #dc2626; border-color: #ef4444;" title="Enable Live Event Mode immediately in database">🔴 Enable Live Mode Now</button>
                 </div>
               `}
 
@@ -5769,15 +5918,15 @@ Participants receive official CREA(I) accreditation credits, certified study mat
               <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;">
                 <input type="text" id="roster-search" class="form-input" placeholder="Search by name, company, mobile, email, invoice..." value="${searchTerm}" style="max-width: 360px; padding: 6px 12px; font-size: 12px;" oninput="app.openDelegateTracker('${headId}', this.value)">
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                  <button onclick="app.openScannerModal('${headId}', 'attendance')" class="btn btn-secondary btn-sm" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" title="${isEventToday ? 'Open scanner' : 'Check-in only permitted on ' + (head.eventDate || 'event day')}">📷 Scan Entry</button>
-                  <button onclick="app.openScannerModal('${headId}', 'gift')" class="btn btn-secondary btn-sm" style="color: #c084fc; border-color: rgba(168, 85, 247, 0.4);" title="${isEventToday ? 'Open gift scanner' : 'Gift collection only permitted on ' + (head.eventDate || 'event day')}">🎁 Scan Gift</button>
+                  <button onclick="app.openScannerModal('${headId}', 'attendance')" class="btn btn-secondary btn-sm" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);" title="${isEventToday ? 'Open scanner' : 'Check-in unlocks when Live Mode is enabled'}">📷 Scan Entry</button>
+                  <button onclick="app.openScannerModal('${headId}', 'gift')" class="btn btn-secondary btn-sm" style="color: #c084fc; border-color: rgba(168, 85, 247, 0.4);" title="${isEventToday ? 'Open gift scanner' : 'Gift collection unlocks when Live Mode is enabled'}">🎁 Scan Gift</button>
                   <button onclick="app.exportDelegateCSV('${headId}')" class="btn btn-primary btn-sm" style="font-size: 11.5px; background: linear-gradient(135deg, #059669, #047857); border-color: #10b981;" title="Download Attendance & Gift Roster as Excel-compatible CSV">📥 Download Roster (Excel / CSV)</button>
                 </div>
               </div>
 
               <!-- Delegates Table -->
               <div style="max-height: 380px; overflow-y: auto;">
-                <table class="data-table">
+                <table id="delegate-tracker-table" class="data-table">
                   <thead>
                     <tr>
                       <th>Delegate & Category</th>
@@ -5820,7 +5969,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                               ✓ Checked In (${new Date(p.attendedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })})
                             </button>
                           ` : `
-                            <button onclick="app.toggleAttendance('${p.invoiceNo}', '${headId}')" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px; ${!isEventToday ? 'opacity: 0.65;' : ''}" title="${!isEventToday ? 'Attendance check-in only permitted on ' + (head.eventDate || 'event day') : 'Mark Entry'}">
+                            <button onclick="app.toggleAttendance('${p.invoiceNo}', '${headId}')" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px; ${!isEventToday ? 'opacity: 0.65;' : ''}" title="${!isEventToday ? 'Attendance check-in unlocks when Live Mode is enabled' : 'Mark Entry'}">
                               ${!isEventToday ? '🔒 ' : '+ '}Mark Entry
                             </button>
                           `}
@@ -5831,7 +5980,7 @@ Participants receive official CREA(I) accreditation credits, certified study mat
                               🎁 Claimed (${new Date(p.giftCollectedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })})
                             </button>
                           ` : `
-                            <button onclick="app.toggleGift('${p.invoiceNo}', '${headId}')" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px; ${!isEventToday ? 'opacity: 0.65;' : ''}" title="${!isEventToday ? 'Gift collection only permitted on ' + (head.eventDate || 'event day') : 'Hand Over Gift'}">
+                            <button onclick="app.toggleGift('${p.invoiceNo}', '${headId}')" class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px; ${!isEventToday ? 'opacity: 0.65;' : ''}" title="${!isEventToday ? 'Gift collection unlocks when Live Mode is enabled' : 'Hand Over Gift'}">
                               ${!isEventToday ? '🔒 ' : '+ '}Hand Over Gift
                             </button>
                           `}
@@ -5850,16 +5999,16 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         `;
       },
 
-      toggleAttendance(invoiceNo, headId) {
+      async toggleAttendance(invoiceNo, headId) {
         const head = this.data.heads.find(h => h.id === headId);
-        if (head && head.eventDate) {
+        if (!this.isHeadLive(head) && head && head.eventDate) {
           const eventDateStr = this.getEventDateOnly(head.eventDate);
           const todayStr = this.getTodayDateOnly();
           if (eventDateStr !== todayStr) {
             const isEarly = eventDateStr > todayStr;
             alert(isEarly
-              ? `⚠️ Check-in is not permitted before the event date.\n\n"${head.title}" is scheduled for ${head.eventDate}.\nAttendance can strictly only be marked on the day of the event held (today is ${todayStr}).`
-              : `🔒 Check-in is closed.\n\n"${head.title}" took place on ${head.eventDate}.\nAttendance can strictly only be marked on the day of the event held (today is ${todayStr}).`);
+              ? `⚠️ Check-in is not permitted before the event date.\n\n"${head.title}" is scheduled for ${head.eventDate}.\nTo open check-in now, click '🔴 Go Live' on this event in the admin dashboard.`
+              : `🔒 Check-in is closed.\n\n"${head.title}" took place on ${head.eventDate}.\nTo reopen check-in, click '🔴 Go Live' on this event in the admin dashboard.`);
             return;
           }
         }
@@ -5869,18 +6018,33 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         payment.attendedAt = payment.attended ? new Date().toISOString() : null;
         this.saveToStorage();
         this.openDelegateTracker(headId);
+
+        // Sync immediately to server & Supabase database
+        try {
+          await fetch("/api/attendance", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              invoiceNo: payment.invoiceNo,
+              headId: head ? head.id : null,
+              mode: "attendance",
+              action: "toggle",
+              forceToggle: true
+            })
+          });
+        } catch(e) {}
       },
 
-      toggleGift(invoiceNo, headId) {
+      async toggleGift(invoiceNo, headId) {
         const head = this.data.heads.find(h => h.id === headId);
-        if (head && head.eventDate) {
+        if (!this.isHeadLive(head) && head && head.eventDate) {
           const eventDateStr = this.getEventDateOnly(head.eventDate);
           const todayStr = this.getTodayDateOnly();
           if (eventDateStr !== todayStr) {
             const isEarly = eventDateStr > todayStr;
             alert(isEarly
-              ? `⚠️ Gift collection is not permitted before the event date.\n\n"${head.title}" is scheduled for ${head.eventDate}.\nDelegate gifts can strictly only be marked on the day of the event held (today is ${todayStr}).`
-              : `🔒 Gift collection is closed.\n\n"${head.title}" took place on ${head.eventDate}.\nDelegate gifts can strictly only be marked on the day of the event held (today is ${todayStr}).`);
+              ? `⚠️ Gift collection is not permitted before the event date.\n\n"${head.title}" is scheduled for ${head.eventDate}.\nTo open gift distribution now, click '🔴 Go Live' on this event in the admin dashboard.`
+              : `🔒 Gift collection is closed.\n\n"${head.title}" took place on ${head.eventDate}.\nTo reopen gift distribution, click '🔴 Go Live' on this event in the admin dashboard.`);
             return;
           }
         }
@@ -5890,6 +6054,21 @@ Participants receive official CREA(I) accreditation credits, certified study mat
         payment.giftCollectedAt = payment.giftCollected ? new Date().toISOString() : null;
         this.saveToStorage();
         this.openDelegateTracker(headId);
+
+        // Sync immediately to server & Supabase database
+        try {
+          await fetch("/api/attendance", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              invoiceNo: payment.invoiceNo,
+              headId: head ? head.id : null,
+              mode: "gift",
+              action: "toggle",
+              forceToggle: true
+            })
+          });
+        } catch(e) {}
       },
 
       getCompanyForPayment(p) {

@@ -58,6 +58,7 @@ CREATE TABLE public.payment_heads (
   venue TEXT DEFAULT 'CREA(I) Centre, Bangalore',
   active_until TIMESTAMPTZ NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('active', 'inactive', 'deactivated', 'deleted')) DEFAULT 'active',
+  is_live BOOLEAN NOT NULL DEFAULT false,
   priority INTEGER NOT NULL DEFAULT 3,
   prices JSONB NOT NULL DEFAULT '{"associate_member": null, "member": null, "board_member": null, "non_member": null}'::jsonb,
   writeup TEXT DEFAULT '',
@@ -67,6 +68,7 @@ CREATE TABLE public.payment_heads (
 
 CREATE INDEX idx_heads_code ON public.payment_heads(code);
 CREATE INDEX idx_heads_status ON public.payment_heads(status);
+CREATE INDEX idx_heads_is_live ON public.payment_heads(is_live);
 CREATE INDEX idx_heads_priority ON public.payment_heads(priority);
 
 -- 3. Invoice Sequence Counters Table
@@ -208,9 +210,9 @@ ON CONFLICT (id) DO UPDATE SET
   joined_date = EXCLUDED.joined_date;
 
 -- 2. Seed Payment Heads (4 Programs)
-INSERT INTO public.payment_heads (id, code, title, type, event_date, event_time, venue, active_until, status, priority, prices, writeup)
+INSERT INTO public.payment_heads (id, code, title, type, event_date, event_time, venue, active_until, status, is_live, priority, prices, writeup)
 VALUES
-  ('head-mem', 'MEM', 'Annual CREA(I) Membership 2026-2027', 'membership', '2026-04-01', 'Full Year Access', 'CREA(I) Headquarters & All Chapters', '2027-03-31T23:59:59', 'active', 1, '{"associate_member":5000,"member":10000,"board_member":8000,"non_member":null}'::jsonb, 'The Confederation of Real Estate Associates (India) — CREA(I) is the premier self-regulatory association of professional real estate brokers, property managers, and valuation experts in South India. 
+  ('head-mem', 'MEM', 'Annual CREA(I) Membership 2026-2027', 'membership', '2026-04-01', 'Full Year Access', 'CREA(I) Headquarters & All Chapters', '2027-03-31T23:59:59', 'active', false, 1, '{"associate_member":5000,"member":10000,"board_member":8000,"non_member":null}'::jsonb, 'The Confederation of Real Estate Associates (India) — CREA(I) is the premier self-regulatory association of professional real estate brokers, property managers, and valuation experts in South India. 
 
 Your annual membership subscription for FY 2026-2027 entitles your firm to comprehensive professional standing, legal assistance on brokerage covenant disputes, and direct integration into the CREA Multi-Listing Exchange (MLE). Associate Members affiliated with active primary member firms enjoy discounted annual fees.
 
@@ -220,11 +222,11 @@ Key Member Privileges:
 3. Preferential registration rates on all accredited broker mastery certifications and quarterly state symposia.
 4. Comprehensive arbitration board access in the event of client or fellow broker commission evasion.
 5. Complimentary entry to the bi-annual Property Showcase networking breakfasts with tier-1 developers including Prestige, Sobha, and Brigade.'),
-  ('head-trn1', 'TRN1', 'Masterclass: RERA Compliance, Title Verification & Escrows', 'training', '2026-10-28', '10:00 AM - 4:00 PM IST', 'The Lalit Hotel, High Grounds, Bangalore', '2026-10-28T09:00:00', 'active', 2, '{"associate_member":1200,"member":1200,"board_member":0,"non_member":2500}'::jsonb, 'RERA litigation and title verification scrutiny have transformed real estate transactions into rigorous legal engagements. This full-day intensive masterclass is curated specifically for practicing real estate brokers, leasing executives, and independent agents seeking to eliminate liability and elevate deal closings.
+  ('head-trn1', 'TRN1', 'Masterclass: RERA Compliance, Title Verification & Escrows', 'training', '2026-10-28', '10:00 AM - 4:00 PM IST', 'The Lalit Hotel, High Grounds, Bangalore', '2026-10-28T09:00:00', 'active', false, 2, '{"associate_member":1200,"member":1200,"board_member":0,"non_member":2500}'::jsonb, 'RERA litigation and title verification scrutiny have transformed real estate transactions into rigorous legal engagements. This full-day intensive masterclass is curated specifically for practicing real estate brokers, leasing executives, and independent agents seeking to eliminate liability and elevate deal closings.
 
 Includes delegate entry pass QR, complimentary welcome gift kit QR, legal draft toolkit on pendrive, gourmet lunch, and accredited certification.'),
-  ('head-trn2', 'TRN2', 'Executive Training: Digital Lead Generation & NRI Client Acquisition', 'training', '2026-11-18', '02:00 PM - 06:00 PM IST', 'Virtual Live Interactive Studio (Zoom HD)', '2026-11-18T13:30:00', 'active', 3, '{"associate_member":800,"member":800,"board_member":0,"non_member":1800}'::jsonb, 'High-net-worth individuals and Non-Resident Indians (NRIs) represent over 38% of luxury real estate purchases and premium commercial leasing volume in metropolitan Bangalore. Reaching and qualifying these diaspora investors requires sophisticated digital acquisition funnels beyond conventional classifieds.'),
-  ('head-evt1', 'EVT1', 'CREA(I) Annual Realty Conclave & Networking Gala 2026', 'event', '2026-12-15', '05:30 PM - 10:30 PM IST', 'Grand Ballroom, The Leela Palace, Old Airport Road, Bangalore', '2026-12-15T16:00:00', 'active', 4, '{"associate_member":2800,"member":2800,"board_member":2000,"non_member":5000}'::jsonb, 'The flagship annual congregation of real estate leaders, developers, institutional funds, and accredited brokerages across India. Features keynote addresses by state urban development ministers, RERA chairpersons, and real estate investment trusts (REITs) directors.
+  ('head-trn2', 'TRN2', 'Executive Training: Digital Lead Generation & NRI Client Acquisition', 'training', '2026-11-18', '02:00 PM - 06:00 PM IST', 'Virtual Live Interactive Studio (Zoom HD)', '2026-11-18T13:30:00', 'active', false, 3, '{"associate_member":800,"member":800,"board_member":0,"non_member":1800}'::jsonb, 'High-net-worth individuals and Non-Resident Indians (NRIs) represent over 38% of luxury real estate purchases and premium commercial leasing volume in metropolitan Bangalore. Reaching and qualifying these diaspora investors requires sophisticated digital acquisition funnels beyond conventional classifieds.'),
+  ('head-evt1', 'EVT1', 'CREA(I) Annual Realty Conclave & Networking Gala 2026', 'event', '2026-12-15', '05:30 PM - 10:30 PM IST', 'Grand Ballroom, The Leela Palace, Old Airport Road, Bangalore', '2026-12-15T16:00:00', 'active', false, 4, '{"associate_member":2800,"member":2800,"board_member":2000,"non_member":5000}'::jsonb, 'The flagship annual congregation of real estate leaders, developers, institutional funds, and accredited brokerages across India. Features keynote addresses by state urban development ministers, RERA chairpersons, and real estate investment trusts (REITs) directors.
 
 All delegates receive an access pass QR code on their invoice for gate entry, plus a dedicated Gift Collection QR code for claiming the exclusive CREA delegate executive kit and memento at the registration kiosk.')
 ON CONFLICT (id) DO UPDATE SET
@@ -236,6 +238,7 @@ ON CONFLICT (id) DO UPDATE SET
   venue = EXCLUDED.venue,
   active_until = EXCLUDED.active_until,
   status = EXCLUDED.status,
+  is_live = EXCLUDED.is_live,
   priority = EXCLUDED.priority,
   prices = EXCLUDED.prices,
   writeup = EXCLUDED.writeup;

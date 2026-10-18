@@ -53,6 +53,7 @@ CREATE TABLE public.payment_heads (
   venue TEXT DEFAULT 'CREA(I) Centre, Bangalore',
   active_until TIMESTAMPTZ NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('active', 'inactive', 'deactivated', 'deleted')) DEFAULT 'active',
+  is_live BOOLEAN NOT NULL DEFAULT false,
   priority INTEGER NOT NULL DEFAULT 3,
   prices JSONB NOT NULL DEFAULT '{"associate_member": null, "member": null, "board_member": null, "non_member": null}'::jsonb,
   writeup TEXT DEFAULT '',
@@ -62,6 +63,7 @@ CREATE TABLE public.payment_heads (
 
 CREATE INDEX idx_heads_code ON public.payment_heads(code);
 CREATE INDEX idx_heads_status ON public.payment_heads(status);
+CREATE INDEX idx_heads_is_live ON public.payment_heads(is_live);
 CREATE INDEX idx_heads_priority ON public.payment_heads(priority);
 
 -- 3. Invoice Sequence Counters Table
